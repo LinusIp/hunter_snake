@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Castle Hunter 3D — Single File</title>
+
+  <!-- Tailwind CDN for quick styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+
+  <style>
+    html,body,#root { height:100%; margin:0; }
+    body { background:#0f172a; font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; overflow:hidden; }
+    .pixel-font { font-family: 'Press Start 2P', cursive; }
+    /* simple fullscreen canvas container */
+    #canvas-wrap { position:absolute; inset:0; z-index:0; }
+    /* UI overlay sits above canvas */
+    #ui { position:absolute; inset:0; z-index:10; pointer-events:none; color:#fff; }
+    .panel { pointer-events:auto; }
+  </style>
+
+  <!-- Import map to map packages to CDN ES modules -->
+  <script type="importmap">
+  {
+    "imports": {
+      "react": "https://aistudiocdn.com/react@^19.2.0",
+      "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.0/client",
+      "@react-three/fiber": "https://aistudiocdn.com/@react-three/fiber@^9.4.0",
+      "@react-three/drei": "https://aistudiocdn.com/@react-three/drei@^10.7.7",
+      "three": "https://aistudiocdn.com/three@^0.181.1"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="canvas-wrap"></div>
+
+  <div id="ui" class="flex flex-col justify-between p-8">
+    <div class="flex justify-between items-start">
+      <div>
+        <h1 class="text-4xl font-bold pixel-font text-emerald-400">CASTLE HUNTER</h1>
+        <p class="text-slate-400 mt-2 font-semibold">VOXEL EDITION</p>
+      </div>
+      <div class="flex gap-4">
+        <div class="bg-black/50 backdrop-blur-md p-4 rounded-xl border border-white/10 flex items-center gap-3 panel">
+          <div>
+            <p class="text-xs text-slate-400 uppercase tracking-wider">Score</p>
+            <p id="score" class="text-2xl font-mono font-bold">0</p>
+          </div>
+        </div>
+        <div class="bg-black/50 backdrop-blur-md p-4 rounded-xl border border-white/10 flex items-center gap-3 panel">
+          <div>
+            <p class="text-xs text-slate-400 uppercase tracking-wider">Best</p>
+            <p id="best" class="text-2xl font-mono font-bold">0</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="center-hud" class="self-center panel text-center mt-6">
+      <div id="controls-hint" class="bg-black/30 backdrop-blur-sm px-6 py-3 rounded-full border border-white/5 text-sm text-slate-400 hidden">
+        Use <span class="text-white font-bold mx-1">WASD</span> or <span class="text-white font-bold mx-1">Arrows</span> to move
+      </div>
+    </div>
+
+    <div id="menus" class="flex items-center justify-center gap-4"></div>
+  </div>
+
+  <div id="root"></div>
+
+  <!-- Main module -->
+  <script type="module">
+  // Imports
+  import React, { useState, useEffect, useRef, useCallback } from "react";
+  import ReactDOMClient from "react-dom/client";
+  import { Canvas, useFrame } from "@react-three/fiber";
+  import { OrbitControls, SoftShadows, Environment, Stars, RoundedBox } from "@react-three/drei";
+
+  /*************** Constants & Types (JS) *****************/
+  const GRID_SIZE = 8;
+  const CELL_SIZE = 1;
+  const CONFIG = {
+    initialSpeed: 300,    // ms per step
+    speedIncrement: 15,
+  };
+
+  const COLORS = {
+    SNAKE_HEAD: "#10b981",
+    SNAKE_BODY: "#065f46",
+    CASTLE_BASE: "#7c3aed",
+    CASTLE_ROOF: "#fb7185",
+    GRID_FLOOR: "#0b1220",
+    GRID_LINES: "#1f2937",
+  };
+
+  // Directions
+  const Direction = {
+    UP: "UP",
+    DOWN: "DOWN",
+    LEFT: "LEFT",
+    RIGHT: "RIGHT"
+  };
+
+  // Helper: random coordinate
+  const getRandomCoordinate = () => Math.floor(Math.random() * (GRID_SIZE * 2 + 1)) - GRID_SIZE;
+  const getRandomPosition = (snakeSegments) => {
+    let pos, coll;
+    do {
+      pos = [getRandomCoordinate(), getRandomCoordinate()];
+      coll = snakeSegments.some(([x,z]) => x === pos[0] && z === pos[1]);
+    } while (coll);
+    return pos;
+  };
+
+  /***************** 3D Components (as React components) ******************/
+  // Snake component
+  function Snake({ segments }) {
+    return React.createElement(
+      "group",
+      null,
+      segments.map((pos, index) => {
+        const isHead = index === 0;
+        const [x,z] = pos;
+        return React.createElement(
+          "group",
+          { key: `${index}-${x}-${z}`, position: [x, 0, z] },
+          React.createElement(
+            RoundedBox,
+            {
+              args: [0.9, 0.9, 0.9],
+              radius: 0.15,
+              smoothness: 4,
+              castShadow: true,
+              receiveShadow: true
+            },
+            React.createElement("meshStandardMaterial", {
+              color: isHead ? COLORS.SNAKE_HEAD : COLORS.SNAKE_BODY,
+              roughness: 0.3,
+              metalness: 0.1
+            })
+          ),
+          !isHead && React.createElement(
+            "mesh",
+            { position: [0, 0.5, 0] },
+            React.createElement("coneGeometry", { args: [0.15, 0.4, 4] }),
+            React.createElement("meshStandardMaterial", { color: COLORS.SNAKE_HEAD })
+          ),
+          isHead && React.createElement(React.Fragment, null,
+            React.createElement("mesh", { position: [0.25, 0.2, -0.35] },
+              React.createElement("sphereGeometry", { args: [0.1, 16, 16] }),
+              React.createElement("meshStandardMaterial", { color: "#ff0000", emissive: "#550000" })
+            ),
+            React.createElement("mesh", { position: [0.25, 0.2, -0.42] },
+              React.createElement("sphereGeometry", { args: [0.05, 16, 16] }),
+              React.createElement("meshStandardMaterial", { color: "black" })
+            ),
+            React.createElement("mesh", { position: [-0.25, 0.2, -0.35] },
+              React.createElement("sphereGeometry", { args: [0.1, 16, 16] }),
+              React.createElement("meshStandardMaterial", { color: "#ff0000", emissive: "#550000" })
+            ),
+            React.createElement("mesh", { position: [-0.25, 0.2, -0.42] },
+              React.createElement("sphereGeometry", { args: [0.05, 16, 16] }),
+              React.createElement("meshStandardMaterial", { color: "black" })
+            ),
+            React.createElement("mesh", { position: [0, 0.3, -0.2], rotation: [Math.PI / 4, 0, 0] },
+              React.createElement("coneGeometry", { args: [0.1, 0.3, 4] }),
+              React.createElement("meshStandardMaterial", { color: COLORS.SNAKE_BODY })
+            )
+          )
+        );
+      })
+    );
+  }
+
+  // Castle component
+  function Castle({ position }) {
+    const [x,z] = position;
+    const ref = React.useRef();
+    useFrame((state) => {
+      if (ref.current) {
+        ref.current.position.y = Math.sin(state.clock.getElapsedTime() * 3) * 0.2 + 0.5;
+        ref.current.rotation.y += 0.01;
+      }
+    });
+    return React.createElement("group", { ref, position: [x, 0.5, z] },
+      // main keep
+      React.createElement("mesh", { position: [0,0,0], castShadow: true, receiveShadow: true },
+        React.createElement("boxGeometry", { args: [0.6,0.6,0.6] }),
+        React.createElement("meshStandardMaterial", { color: COLORS.CASTLE_BASE })
+      ),
+      // towers (4)
+      React.createElement("mesh", { position: [-0.35, 0.2, -0.35], castShadow: true },
+        React.createElement("cylinderGeometry", { args: [0.15, 0.15, 0.8, 8] }),
+        React.createElement("meshStandardMaterial", { color: COLORS.CASTLE_BASE })
+      ),
+      React.createElement("mesh", { position: [0.35, 0.2, -0.35], castShadow: true },
+        React.createElement("cylinderGeometry", { args: [0.15, 0.15, 0.8, 8] }),
+        React.createElement("meshStandardMaterial", { color: COLORS.CASTLE_BASE })
+      ),
+      React.createElement("mesh", { position: [-0.35, 0.2, 0.35], castShadow: true },
+        React.createElement("cylinderGeometry", { args: [0.15, 0.15, 0.8, 8] }),
+        React.createElement("meshStandardMaterial", { color: COLORS.CASTLE_BASE })
+      ),
+      React.createElement("mesh", { position: [0.35, 0.2, 0.35], castShadow: true },
+        React.createElement("cylinderGeometry", { args: [0.15, 0.15, 0.8, 8] }),
+        React.createElement("meshStandardMaterial", { color: COLORS.CASTLE_BASE })
+      ),
+      // roofs (cones)
+      React.createElement("mesh", { position: [-0.35, 0.7, -0.35] },
+        React.createElement("coneGeometry", { args: [0.2,0.4,8] }),
+        React.createElement("meshStandardMaterial", { color: COLORS.CASTLE_ROOF })
+      ),
+      React.createElement("mesh", { position: [0.35, 0.7, -0.35] },
+        React.createElement("coneGeometry", { args: [0.2,0.4,8] }),
+        React.createElement("meshStandardMaterial", { color: COLORS.CASTLE_ROOF })
+      ),
+      React.createElement("mesh", { position: [-0.35, 0.7, 0.35] },
+        React.createElement("coneGeometry", { args: [0.2,0.4,8] }),
+        React.createElement("meshStandardMaterial", { color: COLORS.CASTLE_ROOF })
+      ),
+      React.createElement("mesh", { position: [0.35, 0.7, 0.35] },
+        React.createElement("coneGeometry", { args: [0.2,0.4,8] }),
+        React.createElement("meshStandardMaterial", { color: COLORS.CASTLE_ROOF })
+      ),
+      // flag
+      React.createElement("mesh", { position: [0,0.8,0] },
+        React.createElement("boxGeometry", { args: [0.05,0.6,0.05] }),
+        React.createElement("meshStandardMaterial", { color: "#fff" })
+      ),
+      React.createElement("mesh", { position: [0.15,1,0] },
+        React.createElement("planeGeometry", { args: [0.3,0.2] }),
+        React.createElement("meshStandardMaterial", { color: COLORS.CASTLE_ROOF, side: 2 })
+      )
+    );
+  }
+
+  // Floor component
+  function Floor() {
+    const size = (GRID_SIZE * 2 + 1) * CELL_SIZE;
+    const divisions = GRID_SIZE * 2 + 1;
+    return React.createElement("group", { position: [0,-0.5,0] },
+      React.createElement("mesh", { rotation: [-Math.PI/2,0,0], position: [0,-0.05,0], receiveShadow: true },
+        React.createElement("planeGeometry", { args: [(GRID_SIZE*2+5)*CELL_SIZE, (GRID_SIZE*2+5)*CELL_SIZE] }),
+        React.createElement("meshStandardMaterial", { color: COLORS.GRID_FLOOR, roughness: 0.8 })
+      ),
+      React.createElement("gridHelper", { args: [size, divisions, parseInt(COLORS.GRID_LINES.replace('#','0x')), parseInt(COLORS.GRID_LINES.replace('#','0x'))] })
+    );
+  }
+
+  // 3D Scene
+  function GameScene({ snake, food }) {
+    return React.createElement(Canvas, {
+      shadows: true,
+      camera: { position: [8, 12, 8], fov: 45 },
+      style: { width: "100%", height: "100vh", display: "block" }
+    },
+      React.createElement("color", { attach: "background", args: ["#0f172a"] }),
+      React.createElement(SoftShadows, { size: 15, focus: 0.5, samples: 10 }),
+      React.createElement("ambientLight", { intensity: 0.5 }),
+      React.createElement("directionalLight", {
+        position: [10, 20, 5],
+        intensity: 1.5,
+        castShadow: true,
+        "shadow-mapSize": [2048,2048],
+        "shadow-camera-left": -20,
+        "shadow-camera-right": 20,
+        "shadow-camera-top": 20,
+        "shadow-camera-bottom": -20
+      }),
+      React.createElement("pointLight", { position: [-10,5,-10], intensity: 0.5, color: "#fbbf24" }),
+      React.createElement(Stars, { radius:100, depth:50, count:2000, factor:4, saturation:0, fade:true, speed:1 }),
+      React.createElement(Environment, { preset: "night" }),
+      React.createElement(Floor, null),
+      React.createElement(Snake, { segments: snake }),
+      React.createElement(Castle, { position: food }),
+      React.createElement(OrbitControls, { enableZoom: false, enablePan: false, maxPolarAngle: Math.PI/2.5, minPolarAngle: Math.PI/4 })
+    );
+  }
+
+  /***************** APP (Game logic) ******************/
+  function App() {
+    // initial snake: head at 0,0 then body behind
+    const INITIAL_SNAKE = [[0,0],[0,1],[0,2]];
+    const INITIAL_DIRECTION = Direction.UP;
+    const INITIAL_FOOD = [0,-4];
+
+    const [gameState, setGameState] = useState("MENU"); // MENU, PLAYING, GAME_OVER
+    const [score, setScore] = useState(0);
+    const [highScore, setHighScore] = useState(() => {
+      try {
+        return parseInt(localStorage.getItem("ch_high")||"0",10) || 0;
+      } catch { return 0; }
+    });
+
+    // Refs for loop
+    const snakeRef = useRef(INITIAL_SNAKE.slice());
+    const directionRef = useRef(INITIAL_DIRECTION);
+    const inputQueueRef = useRef([]);
+    const foodRef = useRef(INITIAL_FOOD.slice());
+    const speedRef = useRef(CONFIG.initialSpeed);
+    const lastUpdateRef = useRef(0);
+    const requestRef = useRef(null);
+
+    // React state for rendering
+    const [snake, setSnake] = useState(INITIAL_SNAKE.slice());
+    const [food, setFood] = useState(INITIAL_FOOD.slice());
+
+    // Audio (simple)
+    const eatSound = useRef(null);
+    const dieSound = useRef(null);
+    useEffect(() => {
+      eatSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3');
+      dieSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3');
+      if (eatSound.current) eatSound.current.volume = 0.25;
+      if (dieSound.current) dieSound.current.volume = 0.35;
+    }, []);
+
+    const playSound = (type) => {
+      try {
+        if (type === 'eat' && eatSound.current) { eatSound.current.currentTime = 0; eatSound.current.play().catch(()=>{}); }
+        if (type === 'die' && dieSound.current) { dieSound.current.currentTime = 0; dieSound.current.play().catch(()=>{}); }
+      } catch(e){}
+    };
+
+    // Reset game
+    const resetGame = useCallback(() => {
+      setScore(0);
+      setGameState("PLAYING");
+      snakeRef.current = INITIAL_SNAKE.slice();
+      directionRef.current = INITIAL_DIRECTION;
+      inputQueueRef.current = [];
+      foodRef.current = getRandomPosition(snakeRef.current);
+      speedRef.current = CONFIG.initialSpeed;
+      setSnake(snakeRef.current.slice());
+      setFood(foodRef.current.slice());
+      document.getElementById("controls-hint").classList.remove("hidden");
+    }, []);
+
+    // keyboard input
+    const handleKeyDown = useCallback((e) => {
+      const lastScheduled = inputQueueRef.current.length > 0 ? inputQueueRef.current[inputQueueRef.current.length-1] : directionRef.current;
+      let newDir = null;
+      if (e.key === "ArrowUp" || e.key === "w" || e.key === "W") newDir = Direction.UP;
+      if (e.key === "ArrowDown" || e.key === "s" || e.key === "S") newDir = Direction.DOWN;
+      if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") newDir = Direction.LEFT;
+      if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") newDir = Direction.RIGHT;
+      if (!newDir) return;
+      const isOpposite = (newDir===Direction.UP&&lastScheduled===Direction.DOWN) ||
+                         (newDir===Direction.DOWN&&lastScheduled===Direction.UP) ||
+                         (newDir===Direction.LEFT&&lastScheduled===Direction.RIGHT) ||
+                         (newDir===Direction.RIGHT&&lastScheduled===Direction.LEFT);
+      const isSame = newDir===lastScheduled;
+      if (!isOpposite && !isSame && inputQueueRef.current.length < 3) {
+        inputQueueRef.current.push(newDir);
+      }
+    }, []);
+
+    useEffect(() => {
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [handleKeyDown]);
+
+    // Game loop with requestAnimationFrame
+    const gameLoop = useCallback((time) => {
+      if (gameState !== "PLAYING") return;
+      if (time - lastUpdateRef.current > speedRef.current) {
+        // consume input queue
+        if (inputQueueRef.current.length > 0) directionRef.current = inputQueueRef.current.shift();
+
+        // calc new head
+        const head = snakeRef.current[0];
+        let newHead;
+        switch (directionRef.current) {
+          case Direction.UP: newHead = [head[0], head[1]-1]; break;
+          case Direction.DOWN: newHead = [head[0], head[1]+1]; break;
+          case Direction.LEFT: newHead = [head[0]-1, head[1]]; break;
+          case Direction.RIGHT: newHead = [head[0]+1, head[1]]; break;
+        }
+
+        // wall collision
+        if (newHead[0] < -GRID_SIZE || newHead[0] > GRID_SIZE || newHead[1] < -GRID_SIZE || newHead[1] > GRID_SIZE) {
+          // game over
+          playSound('die');
+          setGameState("GAME_OVER");
+          if (requestRef.current) cancelAnimationFrame(requestRef.current);
+          return;
+        }
+
+        // self collision check
+        const willEat = newHead[0] === foodRef.current[0] && newHead[1] === foodRef.current[1];
+        const segmentsToCheck = willEat ? snakeRef.current : snakeRef.current.slice(0, -1);
+        const isSelfCollision = segmentsToCheck.some(s => s[0] === newHead[0] && s[1] === newHead[1]);
+        if (isSelfCollision) {
+          playSound('die');
+          setGameState("GAME_OVER");
+          if (requestRef.current) cancelAnimationFrame(requestRef.current);
+          return;
+        }
+
+        // move snake
+        const newSnake = [newHead, ...snakeRef.current];
+        if (!willEat) {
+          newSnake.pop();
+        } else {
+          playSound('eat');
+          setScore(prev => {
+            const ns = prev + 1;
+            if (ns > highScore) {
+              setHighScore(ns);
+              try { localStorage.setItem("ch_high", String(ns)); } catch {}
+            }
+            return ns;
+          });
+          speedRef.current = Math.max(50, speedRef.current - CONFIG.speedIncrement);
+          foodRef.current = getRandomPosition(newSnake);
+          setFood(foodRef.current.slice());
+        }
+        snakeRef.current = newSnake;
+        setSnake(newSnake.slice());
+        lastUpdateRef.current = time;
+      }
+      requestRef.current = requestAnimationFrame(gameLoop);
+    }, [gameState, highScore]);
+
+    // start/stop loop
+    useEffect(() => {
+      if (gameState === "PLAYING") {
+        lastUpdateRef.current = performance.now();
+        requestRef.current = requestAnimationFrame(gameLoop);
+      }
+      return () => {
+        if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      };
+    }, [gameState, gameLoop]);
+
+    // sync UI text
+    useEffect(() => {
+      document.getElementById("score").textContent = String(score);
+    }, [score]);
+    useEffect(() => {
+      document.getElementById("best").textContent = String(highScore);
+    }, [highScore]);
+
+    // Menu rendering using simple DOM buttons overlay
+    useEffect(() => {
+      const menus = document.getElementById("menus");
+      menus.innerHTML = "";
+      if (gameState === "MENU") {
+        const wrap = document.createElement("div");
+        wrap.className = "text-center pointer-events-auto animate-in fade-in zoom-in duration-300";
+        wrap.innerHTML = `
+          <h2 class="text-6xl pixel-font text-white mb-8">READY?</h2>
+          <button id="startBtn" class="group relative px-8 py-4 bg-emerald-500 hover:bg-emerald-400 transition-all rounded-lg font-bold text-xl flex items-center justify-center gap-3 mx-auto shadow-[0_0_40px_-10px_rgba(16,185,129,0.5)] hover:shadow-[0_0_60px_-10px_rgba(16,185,129,0.7)] hover:-translate-y-1">START GAME</button>
+          <p class="mt-6 text-slate-400 text-sm">Hunt the castles. Grow the beast.</p>
+        `;
+        menus.appendChild(wrap);
+        document.getElementById("startBtn").addEventListener("click", resetGame);
+      } else if (gameState === "GAME_OVER") {
+        const wrap = document.createElement("div");
+        wrap.className = "text-center pointer-events-auto animate-in slide-in-from-bottom-10 duration-300";
+        wrap.innerHTML = `
+          <div class="text-center pointer-events-auto animate-in slide-in-from-bottom-10 duration-300">
+            <div class="w-24 h-24 mx-auto text-red-200 mb-6" style="font-size:64px;line-height:64px;">☠️</div>
+            <h2 class="text-5xl pixel-font text-white mb-2">GAME OVER</h2>
+            <p class="text-xl text-red-200 mb-8">Your reign has ended.</p>
+            <div class="flex gap-4 justify-center">
+              <button id="tryBtn" class="px-8 py-3 bg-white text-red-900 hover:bg-gray-100 transition-colors rounded-lg font-bold text-lg">TRY AGAIN</button>
+            </div>
+          </div>
+        `;
+        menus.appendChild(wrap);
+        document.getElementById("tryBtn").addEventListener("click", () => {
+          resetGame();
+        });
+      }
+    }, [gameState, resetGame]);
+
+    // expose a simple touch control: swipe-like via on-screen arrows (optional)
+    useEffect(() => {
+      // not implementing mobile UI to keep file small; arrow keys are fine
+    }, []);
+
+    return React.createElement(React.Fragment, null,
+      React.createElement(GameScene, { snake, food }),
+      null
+    );
+  }
+
+  // mount the React App into the canvas-wrap container
+  const rootEl = document.getElementById("canvas-wrap");
+  const root = ReactDOMClient.createRoot(rootEl);
+  root.render(React.createElement(App));
+
+  </script>
+</body>
+</html>
