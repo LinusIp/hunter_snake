@@ -1,0 +1,20 @@
+{
+  "name": "HunterSnake",
+  "short_name": "HunterSnake",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#00101a",
+  "theme_color": "#60a5fa",
+  "icons": [
+    {
+      "src": "huntersnake.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "huntersnake.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
