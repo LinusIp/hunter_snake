@@ -1,563 +1,720 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- Android Icon -->
-  <link rel="icon" type="image/png" sizes="192x192" href="huntersnake.png">
-  <!-- iOS Icon -->
-  <link rel="apple-touch-icon" href="huntersnake.png">
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Castle Hunter 3D — Single File (Fixed)</title>
-
-  <!-- Tailwind CDN for quick styling -->
+  <title>Castle Hunter 3D: Voxel Edition</title>
+  
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-
+  
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-
+  
   <style>
-    html,body,#root { height:100%; margin:0; }
-    body { background:#0f172a; font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; overflow:hidden; }
+    html, body, #root { height: 100%; margin: 0; overflow: hidden; background-color: #0f172a; }
     .pixel-font { font-family: 'Press Start 2P', cursive; }
-    /* simple fullscreen canvas container */
-    #canvas-wrap { position:absolute; inset:0; z-index:0; }
-    /* UI overlay sits above canvas */
-    #ui { position:absolute; inset:0; z-index:10; pointer-events:none; color:#fff; }
-    .panel { pointer-events:auto; }
+    .font-inter { font-family: 'Inter', sans-serif; }
+    
+    /* Custom Scrollbar for Webkit */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
   </style>
 
-  <!-- Import map to map packages to CDN ES modules -->
+  <!-- Import Map -->
   <script type="importmap">
-  {
-    "imports": {
-      "react": "https://aistudiocdn.com/react@^19.2.0",
-      "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.0/client",
-      "@react-three/fiber": "https://aistudiocdn.com/@react-three/fiber@^9.4.0",
-      "@react-three/drei": "https://aistudiocdn.com/@react-three/drei@^10.7.7",
-      "three": "https://aistudiocdn.com/three@^0.181.1"
-    }
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.0/client",
+    "@react-three/fiber": "https://aistudiocdn.com/@react-three/fiber@^9.4.0",
+    "@react-three/drei": "https://aistudiocdn.com/@react-three/drei@^10.7.7",
+    "three": "https://aistudiocdn.com/three@^0.181.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/"
   }
-  </script>
+}
+</script>
 </head>
 <body>
-  <div id="canvas-wrap"></div>
-
-  <div id="ui" class="flex flex-col justify-between p-8">
-    <div class="flex justify-between items-start">
-      <div>
-        <h1 class="text-4xl font-bold pixel-font text-emerald-400">CASTLE HUNTER</h1>
-        <p class="text-slate-400 mt-2 font-semibold">VOXEL EDITION</p>
-      </div>
-      <div class="flex gap-4">
-        <div class="bg-black/50 backdrop-blur-md p-4 rounded-xl border border-white/10 flex items-center gap-3 panel">
-          <div>
-            <p class="text-xs text-slate-400 uppercase tracking-wider">Score</p>
-            <p id="score" class="text-2xl font-mono font-bold">0</p>
-          </div>
-        </div>
-        <div class="bg-black/50 backdrop-blur-md p-4 rounded-xl border border-white/10 flex items-center gap-3 panel">
-          <div>
-            <p class="text-xs text-slate-400 uppercase tracking-wider">Best</p>
-            <p id="best" class="text-2xl font-mono font-bold">0</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div id="center-hud" class="self-center panel text-center mt-6">
-      <div id="controls-hint" class="bg-black/30 backdrop-blur-sm px-6 py-3 rounded-full border border-white/5 text-sm text-slate-400 hidden">
-        Use <span class="text-white font-bold mx-1">WASD</span> or <span class="text-white font-bold mx-1">Arrows</span> to move
-      </div>
-    </div>
-
-    <div id="menus" class="flex items-center justify-center gap-4"></div>
-  </div>
-
   <div id="root"></div>
 
-  <!-- Main module -->
+  <!-- Main Application Script -->
   <script type="module">
-  // Imports
-  import React, { useState, useEffect, useRef, useCallback } from "react";
-  import ReactDOMClient from "react-dom/client";
-  import { Canvas, useFrame } from "@react-three/fiber";
-  import { OrbitControls, SoftShadows, Environment, Stars, RoundedBox } from "@react-three/drei";
+    import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+    import ReactDOMClient from 'react-dom/client';
+    import { Canvas, useFrame } from '@react-three/fiber';
+    import { SoftShadows, OrbitControls, Stars, RoundedBox } from '@react-three/drei';
+    import * as THREE from 'three';
 
-  /*************** Constants & Types (JS) *****************/
-  const GRID_SIZE = 8;
-  const CELL_SIZE = 1;
-  const CONFIG = {
-    initialSpeed: 300,    // ms per step
-    speedIncrement: 15,
-  };
-
-  const COLORS = {
-    SNAKE_HEAD: "#10b981",
-    SNAKE_BODY: "#065f46",
-    CASTLE_BASE: "#7c3aed",
-    CASTLE_ROOF: "#fb7185",
-    GRID_FLOOR: "#0b1220",
-    GRID_LINES: "#1f2937",
-  };
-
-  // Directions
-  const Direction = {
-    UP: "UP",
-    DOWN: "DOWN",
-    LEFT: "LEFT",
-    RIGHT: "RIGHT"
-  };
-
-  // Relative rotation helpers (clockwise / counter-clockwise)
-  const rotateRight = (dir) => {
-    switch (dir) {
-      case Direction.UP: return Direction.RIGHT;
-      case Direction.RIGHT: return Direction.DOWN;
-      case Direction.DOWN: return Direction.LEFT;
-      case Direction.LEFT: return Direction.UP;
-      default: return dir;
-    }
-  };
-  const rotateLeft = (dir) => {
-    switch (dir) {
-      case Direction.UP: return Direction.LEFT;
-      case Direction.LEFT: return Direction.DOWN;
-      case Direction.DOWN: return Direction.RIGHT;
-      case Direction.RIGHT: return Direction.UP;
-      default: return dir;
-    }
-  };
-
-
-  // Helper: random coordinate
-  const getRandomCoordinate = () => Math.floor(Math.random() * (GRID_SIZE * 2 + 1)) - GRID_SIZE;
-  const getRandomPosition = (snakeSegments) => {
-    let pos, coll;
-    do {
-      pos = [getRandomCoordinate(), getRandomCoordinate()];
-      coll = snakeSegments.some(([x,z]) => x === pos[0] && z === pos[1]);
-    } while (coll);
-    return pos;
-  };
-
-  /***************** 3D Components (as React components) ******************/
-  // Snake component — head rotation follows `direction` prop
-  function Snake({ segments, direction }) {
-    const dirToYRot = {
-      [Direction.UP]: 0,
-      [Direction.RIGHT]: -Math.PI / 2,
-      [Direction.DOWN]: Math.PI,
-      [Direction.LEFT]: Math.PI / 2,
+    // --- TYPES ---
+    const Direction = {
+      UP: "UP",
+      DOWN: "DOWN",
+      LEFT: "LEFT",
+      RIGHT: "RIGHT"
     };
 
-    return React.createElement(
-      "group",
-      null,
-      segments.map((pos, index) => {
-        const isHead = index === 0;
-        const [x,z] = pos;
-        return React.createElement(
-          "group",
-          {
-            key: `${index}-${x}-${z}`,
-            position: [x, 0, z],
+    const GameState = {
+      MENU: "MENU",
+      PLAYING: "PLAYING",
+      GAME_OVER: "GAME_OVER"
+    };
+
+    const ThemeMode = {
+      DAY: "DAY",
+      NIGHT: "NIGHT"
+    };
+
+    // --- CONSTANTS ---
+    const GRID_SIZE = 8;
+    const CELL_SIZE = 1;
+    
+    const CONFIG = {
+      initialSpeed: 300,
+      speedIncrement: 15,
+    };
+
+    const COLORS = {
+      SNAKE_HEAD: "#10b981",
+      SNAKE_BODY: "#065f46",
+      CASTLE_BASE: "#7c3aed",
+      CASTLE_ROOF: "#fb7185",
+      GRID_LINES: "#1f2937",
+    };
+
+    // Theme definitions matching the reference images
+    const THEMES = {
+      [ThemeMode.DAY]: {
+        sky: "#f97316", // Orange sky
+        ground: "#bef264", // Lime green ground
+        grid: "#a3e635",
+        ambientIntensity: 0.9,
+        lightColor: "#ffffff",
+        sunColor: "#ffffff", // White sun
+        sunPosition: [-40, 15, -40], // Left side
+        fogColor: "#fed7aa",
+        fogNear: 15,
+        fogFar: 70,
+        treeColor: "#15803d",
+        hillColor: "#84cc16", // Slightly darker lime
+        windmillColor: "#78350f", // Brown
+        windmillPos: [15, 0, -5], // Right side
+        isNight: false
+      },
+      [ThemeMode.NIGHT]: {
+        sky: "#2e1065", // Deep purple sky
+        ground: "#3b0764", // Dark purple ground
+        grid: "#581c87",
+        ambientIntensity: 0.4,
+        lightColor: "#c4b5fd",
+        sunColor: "#f8fafc", // Moon
+        sunPosition: [40, 20, -40], // Right side
+        fogColor: "#2e1065",
+        fogNear: 10,
+        fogFar: 60,
+        treeColor: "#7c3aed", // Purple trees
+        hillColor: "#4c1d95", // Violet hills
+        windmillColor: "#4338ca", // Indigo windmill
+        windmillPos: [-15, 0, -5], // Left side
+        isNight: true
+      }
+    };
+
+    // --- UTILS ---
+    const rotateRight = (dir) => {
+      switch (dir) {
+        case Direction.UP: return Direction.RIGHT;
+        case Direction.RIGHT: return Direction.DOWN;
+        case Direction.DOWN: return Direction.LEFT;
+        case Direction.LEFT: return Direction.UP;
+        default: return dir;
+      }
+    };
+
+    const rotateLeft = (dir) => {
+      switch (dir) {
+        case Direction.UP: return Direction.LEFT;
+        case Direction.LEFT: return Direction.DOWN;
+        case Direction.DOWN: return Direction.RIGHT;
+        case Direction.RIGHT: return Direction.UP;
+        default: return dir;
+      }
+    };
+
+    const getRandomCoordinate = () => Math.floor(Math.random() * (GRID_SIZE * 2 + 1)) - GRID_SIZE;
+
+    const getRandomPosition = (snakeSegments) => {
+      let pos;
+      let coll;
+      do {
+        pos = { x: getRandomCoordinate(), z: getRandomCoordinate() };
+        coll = snakeSegments.some((s) => s.x === pos.x && s.z === pos.z);
+      } while (coll);
+      return pos;
+    };
+
+    // --- COMPONENTS ---
+
+    // 1. Snake Component
+    const Snake = ({ segments, direction }) => {
+      const dirToYRot = useMemo(() => ({
+        [Direction.UP]: 0,
+        [Direction.RIGHT]: -Math.PI / 2,
+        [Direction.DOWN]: Math.PI,
+        [Direction.LEFT]: Math.PI / 2,
+      }), []);
+
+      return React.createElement('group', null,
+        segments.map((pos, index) => {
+          const isHead = index === 0;
+          return React.createElement('group', {
+            key: `${index}-${pos.x}-${pos.z}`,
+            position: [pos.x, 0, pos.z],
             rotation: isHead ? [0, dirToYRot[direction] || 0, 0] : undefined
           },
-          React.createElement(
-            RoundedBox,
-            {
+            React.createElement(RoundedBox, {
               args: [0.9, 0.9, 0.9],
               radius: 0.15,
               smoothness: 4,
               castShadow: true,
               receiveShadow: true
             },
-            React.createElement("meshStandardMaterial", {
-              color: isHead ? COLORS.SNAKE_HEAD : COLORS.SNAKE_BODY,
-              roughness: 0.3,
-              metalness: 0.1
-            })
-          ),
-          !isHead && React.createElement(
-            "mesh",
-            { position: [0, 0.5, 0] },
-            React.createElement("coneGeometry", { args: [0.15, 0.4, 4] }),
-            React.createElement("meshStandardMaterial", { color: COLORS.SNAKE_HEAD })
-          ),
-          isHead && React.createElement(React.Fragment, null,
-            React.createElement("mesh", { position: [0.25, 0.2, -0.35] },
-              React.createElement("sphereGeometry", { args: [0.1, 16, 16] }),
-              React.createElement("meshStandardMaterial", { color: "#ff0000", emissive: "#550000" })
+              React.createElement('meshStandardMaterial', {
+                color: isHead ? COLORS.SNAKE_HEAD : COLORS.SNAKE_BODY,
+                roughness: 0.3,
+                metalness: 0.1
+              })
             ),
-            React.createElement("mesh", { position: [0.25, 0.2, -0.42] },
-              React.createElement("sphereGeometry", { args: [0.05, 16, 16] }),
-              React.createElement("meshStandardMaterial", { color: "black" })
+            !isHead && React.createElement('mesh', { position: [0, 0.5, 0] },
+              React.createElement('coneGeometry', { args: [0.15, 0.4, 4] }),
+              React.createElement('meshStandardMaterial', { color: COLORS.SNAKE_HEAD })
             ),
-            React.createElement("mesh", { position: [-0.25, 0.2, -0.35] },
-              React.createElement("sphereGeometry", { args: [0.1, 16, 16] }),
-              React.createElement("meshStandardMaterial", { color: "#ff0000", emissive: "#550000" })
-            ),
-            React.createElement("mesh", { position: [-0.25, 0.2, -0.42] },
-              React.createElement("sphereGeometry", { args: [0.05, 16, 16] }),
-              React.createElement("meshStandardMaterial", { color: "black" })
-            ),
-            React.createElement("mesh", { position: [0, 0.3, -0.2], rotation: [Math.PI / 4, 0, 0] },
-              React.createElement("coneGeometry", { args: [0.1, 0.3, 4] }),
-              React.createElement("meshStandardMaterial", { color: COLORS.SNAKE_BODY })
+            isHead && React.createElement(React.Fragment, null,
+              React.createElement('mesh', { position: [0.25, 0.2, -0.35] },
+                React.createElement('sphereGeometry', { args: [0.1, 16, 16] }),
+                React.createElement('meshStandardMaterial', { color: "#ff0000", emissive: "#550000" })
+              ),
+              React.createElement('mesh', { position: [0.25, 0.2, -0.42] },
+                React.createElement('sphereGeometry', { args: [0.05, 16, 16] }),
+                React.createElement('meshStandardMaterial', { color: "black" })
+              ),
+              React.createElement('mesh', { position: [-0.25, 0.2, -0.35] },
+                React.createElement('sphereGeometry', { args: [0.1, 16, 16] }),
+                React.createElement('meshStandardMaterial', { color: "#ff0000", emissive: "#550000" })
+              ),
+              React.createElement('mesh', { position: [-0.25, 0.2, -0.42] },
+                React.createElement('sphereGeometry', { args: [0.05, 16, 16] }),
+                React.createElement('meshStandardMaterial', { color: "black" })
+              ),
+              React.createElement('mesh', { position: [0, 0.3, -0.2], rotation: [Math.PI / 4, 0, 0] },
+                React.createElement('coneGeometry', { args: [0.1, 0.3, 4] }),
+                React.createElement('meshStandardMaterial', { color: COLORS.SNAKE_BODY })
+              )
             )
-          )
-        );
-      })
-    );
-  }
-
-
-  // Castle component
-  function Castle({ position }) {
-    const [x,z] = position;
-    const ref = React.useRef();
-    useFrame((state) => {
-      if (ref.current) {
-        ref.current.position.y = Math.sin(state.clock.getElapsedTime() * 3) * 0.2 + 0.5;
-        ref.current.rotation.y += 0.01;
-      }
-    });
-    return React.createElement("group", { ref, position: [x, 0.5, z] },
-      // main keep
-      React.createElement("mesh", { position: [0,0,0], castShadow: true, receiveShadow: true },
-        React.createElement("boxGeometry", { args: [0.6,0.6,0.6] }),
-        React.createElement("meshStandardMaterial", { color: COLORS.CASTLE_BASE })
-      ),
-      // towers (4)
-      React.createElement("mesh", { position: [-0.35, 0.2, -0.35], castShadow: true },
-        React.createElement("cylinderGeometry", { args: [0.15, 0.15, 0.8, 8] }),
-        React.createElement("meshStandardMaterial", { color: COLORS.CASTLE_BASE })
-      ),
-      React.createElement("mesh", { position: [0.35, 0.2, -0.35], castShadow: true },
-        React.createElement("cylinderGeometry", { args: [0.15, 0.15, 0.8, 8] }),
-        React.createElement("meshStandardMaterial", { color: COLORS.CASTLE_BASE })
-      ),
-      React.createElement("mesh", { position: [-0.35, 0.2, 0.35], castShadow: true },
-        React.createElement("cylinderGeometry", { args: [0.15, 0.15, 0.8, 8] }),
-        React.createElement("meshStandardMaterial", { color: COLORS.CASTLE_BASE })
-      ),
-      React.createElement("mesh", { position: [0.35, 0.2, 0.35], castShadow: true },
-        React.createElement("cylinderGeometry", { args: [0.15, 0.15, 0.8, 8] }),
-        React.createElement("meshStandardMaterial", { color: COLORS.CASTLE_BASE })
-      ),
-      // roofs (cones)
-      React.createElement("mesh", { position: [-0.35, 0.7, -0.35] },
-        React.createElement("coneGeometry", { args: [0.2,0.4,8] }),
-        React.createElement("meshStandardMaterial", { color: COLORS.CASTLE_ROOF })
-      ),
-      React.createElement("mesh", { position: [0.35, 0.7, -0.35] },
-        React.createElement("coneGeometry", { args: [0.2,0.4,8] }),
-        React.createElement("meshStandardMaterial", { color: COLORS.CASTLE_ROOF })
-      ),
-      React.createElement("mesh", { position: [-0.35, 0.7, 0.35] },
-        React.createElement("coneGeometry", { args: [0.2,0.4,8] }),
-        React.createElement("meshStandardMaterial", { color: COLORS.CASTLE_ROOF })
-      ),
-      React.createElement("mesh", { position: [0.35, 0.7, 0.35] },
-        React.createElement("coneGeometry", { args: [0.2,0.4,8] }),
-        React.createElement("meshStandardMaterial", { color: COLORS.CASTLE_ROOF })
-      ),
-      // flag
-      React.createElement("mesh", { position: [0,0.8,0] },
-        React.createElement("boxGeometry", { args: [0.05,0.6,0.05] }),
-        React.createElement("meshStandardMaterial", { color: "#fff" })
-      ),
-      React.createElement("mesh", { position: [0.15,1,0] },
-        React.createElement("planeGeometry", { args: [0.3,0.2] }),
-        React.createElement("meshStandardMaterial", { color: COLORS.CASTLE_ROOF, side: 2 })
-      )
-    );
-  }
-
-  // Floor component
-  function Floor() {
-    const size = (GRID_SIZE * 2 + 1) * CELL_SIZE;
-    const divisions = GRID_SIZE * 2 + 1;
-    return React.createElement("group", { position: [0,-0.5,0] },
-      React.createElement("mesh", { rotation: [-Math.PI/2,0,0], position: [0,-0.05,0], receiveShadow: true },
-        React.createElement("planeGeometry", { args: [(GRID_SIZE*2+5)*CELL_SIZE, (GRID_SIZE*2+5)*CELL_SIZE] }),
-        React.createElement("meshStandardMaterial", { color: COLORS.GRID_FLOOR, roughness: 0.8 })
-      ),
-      React.createElement("gridHelper", { args: [size, divisions, parseInt(COLORS.GRID_LINES.replace('#','0x')), parseInt(COLORS.GRID_LINES.replace('#','0x'))] })
-    );
-  }
-
-  // 3D Scene
-  function GameScene({ snake, food, direction }) {
-    return React.createElement(Canvas, {
-      shadows: true,
-      camera: { position: [8, 12, 8], fov: 45 },
-      style: { width: "100%", height: "100vh", display: "block" }
-    },
-      React.createElement("color", { attach: "background", args: ["#0f172a"] }),
-      React.createElement(SoftShadows, { size: 15, focus: 0.5, samples: 10 }),
-      React.createElement("ambientLight", { intensity: 0.5 }),
-      React.createElement("directionalLight", {
-        position: [10, 20, 5],
-        intensity: 1.5,
-        castShadow: true,
-        "shadow-mapSize": [2048,2048],
-        "shadow-camera-left": -20,
-        "shadow-camera-right": 20,
-        "shadow-camera-top": 20,
-        "shadow-camera-bottom": -20
-      }),
-      React.createElement("pointLight", { position: [-10,5,-10], intensity: 0.5, color: "#fbbf24" }),
-      React.createElement(Stars, { radius:100, depth:50, count:2000, factor:4, saturation:0, fade:true, speed:1 }),
-      React.createElement(Environment, { preset: "night" }),
-      React.createElement(Floor, null),
-      React.createElement(Snake, { segments: snake, direction }),
-      React.createElement(Castle, { position: food }),
-      React.createElement(OrbitControls, { enableZoom: false, enablePan: false, maxPolarAngle: Math.PI/2.5, minPolarAngle: Math.PI/4 })
-    );
-  }
-
-  /***************** APP (Game logic) ******************/
-  function App() {
-    // initial snake: head at 0,0 then body behind
-    const INITIAL_SNAKE = [[0,0],[0,1],[0,2]];
-    const INITIAL_DIRECTION = Direction.UP;
-    const INITIAL_FOOD = [0,-4];
-
-    // add visual direction state to drive snake head rotation
-    const [directionState, setDirectionState] = useState(INITIAL_DIRECTION);
-
-    const [gameState, setGameState] = useState("MENU"); // MENU, PLAYING, GAME_OVER
-    const [score, setScore] = useState(0);
-    const [highScore, setHighScore] = useState(() => {
-      try {
-        return parseInt(localStorage.getItem("ch_high")||"0",10) || 0;
-      } catch { return 0; }
-    });
-
-    // Refs for loop
-    const snakeRef = useRef(INITIAL_SNAKE.slice());
-    const directionRef = useRef(INITIAL_DIRECTION);
-    const inputQueueRef = useRef([]);
-    const foodRef = useRef(INITIAL_FOOD.slice());
-    const speedRef = useRef(CONFIG.initialSpeed);
-    const lastUpdateRef = useRef(0);
-    const requestRef = useRef(null);
-
-    // React state for rendering
-    const [snake, setSnake] = useState(INITIAL_SNAKE.slice());
-    const [food, setFood] = useState(INITIAL_FOOD.slice());
-
-    // Audio (simple)
-    const eatSound = useRef(null);
-    const dieSound = useRef(null);
-    useEffect(() => {
-      eatSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3');
-      dieSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3');
-      if (eatSound.current) eatSound.current.volume = 0.25;
-      if (dieSound.current) dieSound.current.volume = 0.35;
-    }, []);
-
-    const playSound = (type) => {
-      try {
-        if (type === 'eat' && eatSound.current) { eatSound.current.currentTime = 0; eatSound.current.play().catch(()=>{}); }
-        if (type === 'die' && dieSound.current) { dieSound.current.currentTime = 0; dieSound.current.play().catch(()=>{}); }
-      } catch(e){}
+          );
+        })
+      );
     };
 
-    // Reset game
-    const resetGame = useCallback(() => {
-      setScore(0);
-      setGameState("PLAYING");
-      snakeRef.current = INITIAL_SNAKE.slice();
-      directionRef.current = INITIAL_DIRECTION;
-      inputQueueRef.current = [];
-      foodRef.current = getRandomPosition(snakeRef.current);
-      speedRef.current = CONFIG.initialSpeed;
-      setSnake(snakeRef.current.slice());
-      setFood(foodRef.current.slice());
-      setDirectionState(INITIAL_DIRECTION);
-      document.getElementById("controls-hint").classList.remove("hidden");
-    }, []);
-
-    // keyboard input
-    const handleKeyDown = useCallback((e) => {
-      // ignore auto-repeat (holding key down)
-      if (e.repeat) return;
-
-      const lastScheduled = inputQueueRef.current.length > 0 ? inputQueueRef.current[inputQueueRef.current.length-1] : directionRef.current;
-      // Relative rotate keys: A/D rotate left/right from the last scheduled direction
-      if (e.key === 'a' || e.key === 'A') {
-        const newDir = rotateLeft(lastScheduled);
-        // rotation shouldn't create a 180 instantly, so just push
-        if (inputQueueRef.current.length < 3) inputQueueRef.current.push(newDir);
-        return;
-      }
-      if (e.key === 'd' || e.key === 'D') {
-        const newDir = rotateRight(lastScheduled);
-        if (inputQueueRef.current.length < 3) inputQueueRef.current.push(newDir);
-        return;
-      }
-
-      let newDir = null;
-      if (e.key === "ArrowUp" || e.key === "w" || e.key === "W") newDir = Direction.UP;
-      if (e.key === "ArrowDown" || e.key === "s" || e.key === "S") newDir = Direction.DOWN;
-      if (e.key === "ArrowLeft" || e.key === "ArrowLeft") newDir = Direction.LEFT; // keep arrow mapping
-      if (e.key === "ArrowRight" || e.key === "ArrowRight") newDir = Direction.RIGHT; // keep arrow mapping
-      if (!newDir) return;
-
-      const isOpposite = (newDir===Direction.UP&&lastScheduled===Direction.DOWN) ||
-                         (newDir===Direction.DOWN&&lastScheduled===Direction.UP) ||
-                         (newDir===Direction.LEFT&&lastScheduled===Direction.RIGHT) ||
-                         (newDir===Direction.RIGHT&&lastScheduled===Direction.LEFT);
-      // allow duplicate (same) directions in the queue — needed for quick repeated presses
-      if (!isOpposite && inputQueueRef.current.length < 3) {
-        inputQueueRef.current.push(newDir);
-      }
-    }, []);
-
-    useEffect(() => {
-      window.addEventListener("keydown", handleKeyDown);
-      return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [handleKeyDown]);
-
-    // Game loop with requestAnimationFrame
-    const gameLoop = useCallback((time) => {
-      if (gameState !== "PLAYING") return;
-      if (time - lastUpdateRef.current > speedRef.current) {
-        // consume input queue
-        if (inputQueueRef.current.length > 0) {
-          directionRef.current = inputQueueRef.current.shift();
-          // update react state used for rendering head rotation
-          setDirectionState(directionRef.current);
+    // 2. Castle (Food) Component
+    const Castle = ({ position }) => {
+      const ref = useRef(null);
+      useFrame((state) => {
+        if (ref.current) {
+          ref.current.position.y = Math.sin(state.clock.getElapsedTime() * 3) * 0.2 + 0.5;
+          ref.current.rotation.y += 0.01;
         }
+      });
 
-        // calc new head
-        const head = snakeRef.current[0];
-        let newHead;
-        switch (directionRef.current) {
-          case Direction.UP: newHead = [head[0], head[1]-1]; break;
-          case Direction.DOWN: newHead = [head[0], head[1]+1]; break;
-          case Direction.LEFT: newHead = [head[0]-1, head[1]]; break;
-          case Direction.RIGHT: newHead = [head[0]+1, head[1]]; break;
+      return React.createElement('group', { ref: ref, position: [position.x, 0.5, position.z] },
+        React.createElement('mesh', { position: [0, 0, 0], castShadow: true, receiveShadow: true },
+          React.createElement('boxGeometry', { args: [0.6, 0.6, 0.6] }),
+          React.createElement('meshStandardMaterial', { color: COLORS.CASTLE_BASE })
+        ),
+        [-0.35, 0.35].map((x) => 
+          [-0.35, 0.35].map((z) => 
+            React.createElement('group', { key: `${x}-${z}`, position: [x, 0.2, z] },
+              React.createElement('mesh', { castShadow: true },
+                React.createElement('cylinderGeometry', { args: [0.15, 0.15, 0.8, 8] }),
+                React.createElement('meshStandardMaterial', { color: COLORS.CASTLE_BASE })
+              ),
+              React.createElement('mesh', { position: [0, 0.5, 0] },
+                React.createElement('coneGeometry', { args: [0.2, 0.4, 8] }),
+                React.createElement('meshStandardMaterial', { color: COLORS.CASTLE_ROOF })
+              )
+            )
+          )
+        ),
+        React.createElement('mesh', { position: [0, 0.8, 0] },
+          React.createElement('boxGeometry', { args: [0.05, 0.6, 0.05] }),
+          React.createElement('meshStandardMaterial', { color: "#fff" })
+        ),
+        React.createElement('mesh', { position: [0.15, 1, 0] },
+          React.createElement('planeGeometry', { args: [0.3, 0.2] }),
+          React.createElement('meshStandardMaterial', { color: COLORS.CASTLE_ROOF, side: 2 })
+        )
+      );
+    };
+
+    // 3. Environment Components
+    const Windmill = ({ position, color }) => {
+      const rotorRef = useRef(null);
+      useFrame((_, delta) => {
+        if (rotorRef.current) rotorRef.current.rotation.z -= delta * 2;
+      });
+
+      return React.createElement('group', { position: position },
+        React.createElement('mesh', { position: [0, 1.5, 0], castShadow: true },
+          React.createElement('cylinderGeometry', { args: [0.8, 1.2, 3, 6] }),
+          React.createElement('meshStandardMaterial', { color: color })
+        ),
+        React.createElement('mesh', { position: [0, 3.5, 0] },
+          React.createElement('coneGeometry', { args: [1, 1.5, 6] }),
+          React.createElement('meshStandardMaterial', { color: "#444" })
+        ),
+        React.createElement('group', { ref: rotorRef, position: [0, 2.5, 0.8] },
+          React.createElement('mesh', { position: [0, 0, 0.1] },
+            React.createElement('boxGeometry', { args: [0.3, 0.3, 0.2] }),
+            React.createElement('meshStandardMaterial', { color: "#222" })
+          ),
+          [0, 1, 2, 3].map(i => 
+            React.createElement('group', { key: i, rotation: [0, 0, (i * Math.PI) / 2] },
+              React.createElement('mesh', { position: [0, 1.2, 0] },
+                React.createElement('boxGeometry', { args: [0.2, 2.4, 0.05] }),
+                React.createElement('meshStandardMaterial', { color: "#ddd" })
+              )
+            )
+          )
+        )
+      );
+    };
+
+    const Tree = ({ position, color }) => {
+      return React.createElement('group', { position: position },
+        React.createElement('mesh', { position: [0, 0.5, 0], castShadow: true },
+          React.createElement('cylinderGeometry', { args: [0.2, 0.3, 1, 5] }),
+          React.createElement('meshStandardMaterial', { color: "#3f2e18" })
+        ),
+        React.createElement('mesh', { position: [0, 1.5, 0], castShadow: true },
+          React.createElement('coneGeometry', { args: [0.8, 1.5, 5] }),
+          React.createElement('meshStandardMaterial', { color: color })
+        ),
+        React.createElement('mesh', { position: [0, 2.2, 0], castShadow: true },
+          React.createElement('coneGeometry', { args: [0.6, 1.2, 5] }),
+          React.createElement('meshStandardMaterial', { color: color })
+        )
+      );
+    };
+
+    const Hills = ({ color }) => {
+      const hills = useMemo(() => {
+        const items = [];
+        const count = 20;
+        const radius = 25;
+        for (let i = 0; i < count; i++) {
+          const angle = (i / count) * Math.PI * 2;
+          const dist = radius + Math.random() * 5;
+          const x = Math.cos(angle) * dist;
+          const z = Math.sin(angle) * dist;
+          const scale = [4 + Math.random() * 4, 2 + Math.random() * 2, 4 + Math.random() * 4];
+          
+          items.push(
+            React.createElement('mesh', { key: i, position: [x, -1, z], scale: scale },
+              React.createElement('sphereGeometry', { args: [1, 16, 16] }),
+              React.createElement('meshStandardMaterial', { color: color })
+            )
+          );
         }
+        return items;
+      }, [color]);
+      return React.createElement('group', null, hills);
+    };
 
-        // wall collision
-        if (newHead[0] < -GRID_SIZE || newHead[0] > GRID_SIZE || newHead[1] < -GRID_SIZE || newHead[1] > GRID_SIZE) {
-          // game over
-          playSound('die');
-          setGameState("GAME_OVER");
-          if (requestRef.current) cancelAnimationFrame(requestRef.current);
-          return;
+    const EnvironmentScenery = ({ mode }) => {
+      const theme = THEMES[mode];
+      const isNight = theme.isNight;
+
+      const trees = useMemo(() => {
+        const items = [];
+        const safeZone = GRID_SIZE + 3; // Ensure trees are well outside the polygon grid
+        const range = 35;
+        
+        for (let i = 0; i < 40; i++) {
+          const r = safeZone + Math.random() * (range - safeZone);
+          const theta = Math.random() * Math.PI * 2;
+          const x = r * Math.cos(theta);
+          const z = r * Math.sin(theta);
+          const scale = 0.8 + Math.random() * 0.5;
+          items.push(
+            React.createElement('group', { key: i, scale: [scale, scale, scale] },
+              React.createElement(Tree, { position: [x, 0, z], color: theme.treeColor })
+            )
+          );
         }
+        return items;
+      }, [theme.treeColor]);
 
-        // self collision check
-        const willEat = newHead[0] === foodRef.current[0] && newHead[1] === foodRef.current[1];
-        const segmentsToCheck = willEat ? snakeRef.current : snakeRef.current.slice(0, -1);
-        const isSelfCollision = segmentsToCheck.some(s => s[0] === newHead[0] && s[1] === newHead[1]);
-        if (isSelfCollision) {
-          playSound('die');
-          setGameState("GAME_OVER");
-          if (requestRef.current) cancelAnimationFrame(requestRef.current);
-          return;
-        }
+      return React.createElement(React.Fragment, null,
+        React.createElement('color', { attach: "background", args: [theme.sky] }),
+        React.createElement('fog', { attach: "fog", args: [theme.fogColor, theme.fogNear, theme.fogFar] }),
+        
+        // Ground
+        React.createElement('mesh', { rotation: [-Math.PI / 2, 0, 0], position: [0, -0.55, 0], receiveShadow: true },
+          React.createElement('circleGeometry', { args: [80, 32] }),
+          React.createElement('meshStandardMaterial', { color: theme.ground })
+        ),
+        
+        // Grid (Polygon) Area
+        React.createElement('mesh', { rotation: [-Math.PI / 2, 0, 0], position: [0, -0.5, 0], receiveShadow: true },
+          React.createElement('planeGeometry', { args: [(GRID_SIZE * 2 + 1) * CELL_SIZE, (GRID_SIZE * 2 + 1) * CELL_SIZE] }),
+          React.createElement('meshStandardMaterial', { color: theme.grid })
+        ),
+        React.createElement('gridHelper', { 
+          args: [(GRID_SIZE * 2 + 1) * CELL_SIZE, GRID_SIZE * 2 + 1, parseInt(COLORS.GRID_LINES.replace('#', '0x')), parseInt(COLORS.GRID_LINES.replace('#', '0x'))],
+          position: [0, -0.49, 0]
+        }),
 
-        // move snake
-        const newSnake = [newHead, ...snakeRef.current];
-        if (!willEat) {
-          newSnake.pop();
-        } else {
-          playSound('eat');
-          setScore(prev => {
-            const ns = prev + 1;
-            if (ns > highScore) {
-              setHighScore(ns);
-              try { localStorage.setItem("ch_high", String(ns)); } catch {}
-            }
-            return ns;
-          });
-          speedRef.current = Math.max(50, speedRef.current - CONFIG.speedIncrement);
-          foodRef.current = getRandomPosition(newSnake);
-          setFood(foodRef.current.slice());
-        }
-        snakeRef.current = newSnake;
-        setSnake(newSnake.slice());
-        lastUpdateRef.current = time;
-      }
-      requestRef.current = requestAnimationFrame(gameLoop);
-    }, [gameState, highScore]);
+        // Hills surrounding the polygon
+        React.createElement(Hills, { color: theme.hillColor }),
 
-    // start/stop loop
-    useEffect(() => {
-      if (gameState === "PLAYING") {
-        lastUpdateRef.current = performance.now();
-        requestRef.current = requestAnimationFrame(gameLoop);
-      }
-      return () => {
-        if (requestRef.current) cancelAnimationFrame(requestRef.current);
+        // Large Celestial Body (Sun/Moon) - Size increased significantly to match image
+        React.createElement('group', { position: theme.sunPosition },
+          React.createElement('mesh', null,
+            React.createElement('sphereGeometry', { args: [12, 32, 32] }), 
+            React.createElement('meshBasicMaterial', { color: theme.sunColor })
+          ),
+          !isNight && React.createElement('pointLight', { intensity: 1, distance: 200, color: theme.sunColor })
+        ),
+
+        isNight && React.createElement(Stars, { radius: 80, depth: 50, count: 3000, factor: 4, saturation: 0, fade: true, speed: 0.5 }),
+
+        // Decorative Trees
+        trees,
+
+        // Windmill
+        React.createElement('group', { 
+          position: theme.windmillPos, 
+          rotation: [0, isNight ? Math.PI / 4 : -Math.PI / 4, 0] 
+        },
+          React.createElement(Windmill, { position: [0, 0, 0], color: theme.windmillColor })
+        )
+      );
+    };
+
+    // 4. Game Scene
+    const GameScene = ({ snake, food, direction, themeMode }) => {
+      const theme = THEMES[themeMode];
+
+      return React.createElement(Canvas, {
+        shadows: true,
+        camera: { position: [8, 12, 8], fov: 45 },
+        className: "w-full h-full block"
+      },
+        React.createElement(SoftShadows, { size: 15, focus: 0.5, samples: 10 }),
+        React.createElement('ambientLight', { intensity: theme.ambientIntensity, color: theme.lightColor }),
+        React.createElement('directionalLight', {
+          position: [10, 20, 5],
+          intensity: themeMode === ThemeMode.DAY ? 1.5 : 0.5,
+          castShadow: true,
+          "shadow-mapSize": [2048, 2048],
+          "shadow-camera-left": -20,
+          "shadow-camera-right": 20,
+          "shadow-camera-top": 20,
+          "shadow-camera-bottom": -20,
+          color: theme.lightColor
+        }),
+        themeMode === ThemeMode.NIGHT && React.createElement('pointLight', { position: [-10, 5, -10], intensity: 0.5, color: "#8b5cf6" }),
+        
+        React.createElement(EnvironmentScenery, { mode: themeMode }),
+        React.createElement(Snake, { segments: snake, direction: direction }),
+        React.createElement(Castle, { position: food }),
+        
+        React.createElement(OrbitControls, {
+          enableZoom: false,
+          enablePan: false,
+          maxPolarAngle: Math.PI / 2.5,
+          minPolarAngle: Math.PI / 6
+        })
+      );
+    };
+
+    // --- MAIN APP ---
+    const INITIAL_SNAKE = [{x:0, z:0}, {x:0, z:1}, {x:0, z:2}];
+    const INITIAL_DIRECTION = Direction.UP;
+    const INITIAL_FOOD = {x:0, z:-4};
+
+    const App = () => {
+      const [gameState, setGameState] = useState(GameState.MENU);
+      const [score, setScore] = useState(0);
+      const [highScore, setHighScore] = useState(0);
+      const [themeMode, setThemeMode] = useState(ThemeMode.DAY);
+      
+      const [snake, setSnake] = useState([...INITIAL_SNAKE]);
+      const [food, setFood] = useState({...INITIAL_FOOD});
+      const [directionState, setDirectionState] = useState(INITIAL_DIRECTION);
+
+      const snakeRef = useRef([...INITIAL_SNAKE]);
+      const directionRef = useRef(INITIAL_DIRECTION);
+      const inputQueueRef = useRef([]);
+      const foodRef = useRef({...INITIAL_FOOD});
+      const speedRef = useRef(CONFIG.initialSpeed);
+      const lastUpdateRef = useRef(0);
+      const requestRef = useRef(null);
+
+      const eatSound = useRef(null);
+      const dieSound = useRef(null);
+
+      useEffect(() => {
+        const loadHigh = localStorage.getItem("ch_high");
+        if (loadHigh) setHighScore(parseInt(loadHigh, 10));
+
+        eatSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3');
+        dieSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3');
+        if (eatSound.current) eatSound.current.volume = 0.25;
+        if (dieSound.current) dieSound.current.volume = 0.35;
+      }, []);
+
+      const playSound = (type) => {
+        try {
+          if (type === 'eat' && eatSound.current) {
+            eatSound.current.currentTime = 0;
+            eatSound.current.play().catch(() => {});
+          }
+          if (type === 'die' && dieSound.current) {
+            dieSound.current.currentTime = 0;
+            dieSound.current.play().catch(() => {});
+          }
+        } catch (e) {}
       };
-    }, [gameState, gameLoop]);
 
-    // sync UI text
-    useEffect(() => {
-      document.getElementById("score").textContent = String(score);
-    }, [score]);
-    useEffect(() => {
-      document.getElementById("best").textContent = String(highScore);
-    }, [highScore]);
+      const resetGame = useCallback(() => {
+        setScore(0);
+        setGameState(GameState.PLAYING);
+        snakeRef.current = [...INITIAL_SNAKE];
+        directionRef.current = INITIAL_DIRECTION;
+        inputQueueRef.current = [];
+        foodRef.current = getRandomPosition(snakeRef.current);
+        speedRef.current = CONFIG.initialSpeed;
+        
+        setSnake([...snakeRef.current]);
+        setFood({...foodRef.current});
+        setDirectionState(INITIAL_DIRECTION);
+      }, []);
 
-    // Menu rendering using simple DOM buttons overlay
-    useEffect(() => {
-      const menus = document.getElementById("menus");
-      menus.innerHTML = "";
-      if (gameState === "MENU") {
-        const wrap = document.createElement("div");
-        wrap.className = "text-center pointer-events-auto animate-in fade-in zoom-in duration-300";
-        wrap.innerHTML = `
-          <h2 class="text-6xl pixel-font text-white mb-8">READY?</h2>
-          <button id="startBtn" class="group relative px-8 py-4 bg-emerald-500 hover:bg-emerald-400 transition-all rounded-lg font-bold text-xl flex items-center justify-center gap-3 mx-auto shadow-[0_0_40px_-10px_rgba(16,185,129,0.5)] hover:shadow-[0_0_60px_-10px_rgba(16,185,129,0.7)] hover:-translate-y-1">START GAME</button>
-          <p class="mt-6 text-slate-400 text-sm">Hunt the castles. Grow the beast.</p>
-        `;
-        menus.appendChild(wrap);
-        document.getElementById("startBtn").addEventListener("click", resetGame);
-      } else if (gameState === "GAME_OVER") {
-        const wrap = document.createElement("div");
-        wrap.className = "text-center pointer-events-auto animate-in slide-in-from-bottom-10 duration-300";
-        wrap.innerHTML = `
-          <div class="text-center pointer-events-auto animate-in slide-in-from-bottom-10 duration-300">
-            <div class="w-24 h-24 mx-auto text-red-200 mb-6" style="font-size:64px;line-height:64px;">☠️</div>
-            <h2 class="text-5xl pixel-font text-white mb-2">GAME OVER</h2>
-            <p class="text-xl text-red-200 mb-8">Your reign has ended.</p>
-            <div class="flex gap-4 justify-center">
-              <button id="tryBtn" class="px-8 py-3 bg-white text-red-900 hover:bg-gray-100 transition-colors rounded-lg font-bold text-lg">TRY AGAIN</button>
-            </div>
-          </div>
-        `;
-        menus.appendChild(wrap);
-        document.getElementById("tryBtn").addEventListener("click", () => {
-          resetGame();
-        });
-      }
-    }, [gameState, resetGame]);
+      const handleKeyDown = useCallback((e) => {
+        if (e.repeat) return;
+        const lastScheduled = inputQueueRef.current.length > 0 
+          ? inputQueueRef.current[inputQueueRef.current.length - 1] 
+          : directionRef.current;
 
-    // expose a simple touch control: swipe-like via on-screen arrows (optional)
-    useEffect(() => {
-      // not implementing mobile UI to keep file small; arrow keys are fine
-    }, []);
+        if (e.key === 'a' || e.key === 'A') {
+          const newDir = rotateLeft(lastScheduled);
+          if (inputQueueRef.current.length < 3) inputQueueRef.current.push(newDir);
+          return;
+        }
+        if (e.key === 'd' || e.key === 'D') {
+          const newDir = rotateRight(lastScheduled);
+          if (inputQueueRef.current.length < 3) inputQueueRef.current.push(newDir);
+          return;
+        }
 
-    return React.createElement(React.Fragment, null,
-      React.createElement(GameScene, { snake, food, direction: directionState }),
-      null
-    );
-  }
+        let newDir = null;
+        if (e.key === "ArrowUp" || e.key === "w" || e.key === "W") newDir = Direction.UP;
+        if (e.key === "ArrowDown" || e.key === "s" || e.key === "S") newDir = Direction.DOWN;
+        if (e.key === "ArrowLeft") newDir = Direction.LEFT;
+        if (e.key === "ArrowRight") newDir = Direction.RIGHT;
 
-  // mount the React App into the canvas-wrap container
-  const rootEl = document.getElementById("canvas-wrap");
-  const root = ReactDOMClient.createRoot(rootEl);
-  root.render(React.createElement(App));
+        if (!newDir) return;
 
+        const isOpposite = 
+          (newDir === Direction.UP && lastScheduled === Direction.DOWN) ||
+          (newDir === Direction.DOWN && lastScheduled === Direction.UP) ||
+          (newDir === Direction.LEFT && lastScheduled === Direction.RIGHT) ||
+          (newDir === Direction.RIGHT && lastScheduled === Direction.LEFT);
+
+        if (!isOpposite && inputQueueRef.current.length < 3) {
+          inputQueueRef.current.push(newDir);
+        }
+      }, []);
+
+      useEffect(() => {
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+      }, [handleKeyDown]);
+
+      const gameLoop = useCallback((time) => {
+        if (gameState !== GameState.PLAYING) return;
+
+        if (time - lastUpdateRef.current > speedRef.current) {
+          if (inputQueueRef.current.length > 0) {
+            const nextDir = inputQueueRef.current.shift();
+            if (nextDir) {
+              directionRef.current = nextDir;
+              setDirectionState(nextDir);
+            }
+          }
+
+          const head = snakeRef.current[0];
+          let newHead = { ...head };
+          switch (directionRef.current) {
+            case Direction.UP: newHead.z -= 1; break;
+            case Direction.DOWN: newHead.z += 1; break;
+            case Direction.LEFT: newHead.x -= 1; break;
+            case Direction.RIGHT: newHead.x += 1; break;
+          }
+
+          if (newHead.x < -GRID_SIZE || newHead.x > GRID_SIZE || newHead.z < -GRID_SIZE || newHead.z > GRID_SIZE) {
+            playSound('die');
+            setGameState(GameState.GAME_OVER);
+            if (requestRef.current) cancelAnimationFrame(requestRef.current);
+            return;
+          }
+
+          const willEat = newHead.x === foodRef.current.x && newHead.z === foodRef.current.z;
+          const segmentsToCheck = willEat ? snakeRef.current : snakeRef.current.slice(0, -1);
+          if (segmentsToCheck.some(s => s.x === newHead.x && s.z === newHead.z)) {
+            playSound('die');
+            setGameState(GameState.GAME_OVER);
+            if (requestRef.current) cancelAnimationFrame(requestRef.current);
+            return;
+          }
+
+          const newSnake = [newHead, ...snakeRef.current];
+          if (!willEat) {
+            newSnake.pop();
+          } else {
+            playSound('eat');
+            setScore(s => {
+              const ns = s + 1;
+              if (ns > highScore) {
+                setHighScore(ns);
+                localStorage.setItem("ch_high", String(ns));
+              }
+              return ns;
+            });
+            speedRef.current = Math.max(50, speedRef.current - CONFIG.speedIncrement);
+            foodRef.current = getRandomPosition(newSnake);
+            setFood({...foodRef.current});
+          }
+
+          snakeRef.current = newSnake;
+          setSnake([...newSnake]);
+          lastUpdateRef.current = time;
+        }
+        requestRef.current = requestAnimationFrame(gameLoop);
+      }, [gameState, highScore]);
+
+      useEffect(() => {
+        if (gameState === GameState.PLAYING) {
+          lastUpdateRef.current = performance.now();
+          requestRef.current = requestAnimationFrame(gameLoop);
+        }
+        return () => {
+          if (requestRef.current) cancelAnimationFrame(requestRef.current);
+        };
+      }, [gameState, gameLoop]);
+
+      const toggleTheme = () => {
+        setThemeMode(prev => prev === ThemeMode.DAY ? ThemeMode.NIGHT : ThemeMode.DAY);
+      };
+
+      return React.createElement('div', { className: "relative w-full h-full overflow-hidden" },
+        // 3D Layer
+        React.createElement('div', { className: "absolute inset-0 z-0" },
+          React.createElement(GameScene, {
+            snake: snake,
+            food: food,
+            direction: directionState,
+            themeMode: themeMode
+          })
+        ),
+        
+        // UI Layer
+        React.createElement('div', { className: "absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-6 md:p-8" },
+          // Header
+          React.createElement('div', { className: "flex justify-between items-start" },
+            React.createElement('div', null,
+              React.createElement('h1', { className: "text-3xl md:text-4xl font-bold pixel-font text-emerald-400 drop-shadow-md" }, "CASTLE HUNTER"),
+              React.createElement('p', { className: "text-slate-300 mt-2 font-semibold drop-shadow" }, "VOXEL EDITION")
+            ),
+            React.createElement('div', { className: "flex gap-4 pointer-events-auto items-center" },
+              // THEME BUTTON (Added as requested near scores)
+              React.createElement('button', {
+                onClick: toggleTheme,
+                className: `p-3 rounded-xl border transition-colors shadow-lg flex items-center justify-center hover:scale-105 transform duration-200 ${
+                  themeMode === ThemeMode.DAY 
+                    ? 'bg-sky-400/80 border-sky-200 text-yellow-100' 
+                    : 'bg-indigo-900/80 border-indigo-700 text-indigo-200'
+                }`,
+                title: "Toggle Environment"
+              },
+                themeMode === ThemeMode.DAY ? '☀️' : '🌙'
+              ),
+
+              React.createElement('div', { className: "bg-black/50 backdrop-blur-md p-3 md:p-4 rounded-xl border border-white/10 flex items-center gap-3" },
+                React.createElement('div', null,
+                  React.createElement('p', { className: "text-[10px] md:text-xs text-slate-400 uppercase tracking-wider" }, "Score"),
+                  React.createElement('p', { className: "text-xl md:text-2xl font-mono font-bold text-white" }, score)
+                )
+              ),
+              React.createElement('div', { className: "bg-black/50 backdrop-blur-md p-3 md:p-4 rounded-xl border border-white/10 flex items-center gap-3" },
+                React.createElement('div', null,
+                  React.createElement('p', { className: "text-[10px] md:text-xs text-slate-400 uppercase tracking-wider" }, "Best"),
+                  React.createElement('p', { className: "text-xl md:text-2xl font-mono font-bold text-white" }, highScore)
+                )
+              )
+            )
+          ),
+
+          // Controls Hint
+          gameState === GameState.PLAYING && React.createElement('div', { className: "self-center text-center mb-12 animate-pulse" },
+            React.createElement('div', { className: "bg-black/30 backdrop-blur-sm px-6 py-3 rounded-full border border-white/5 text-sm text-slate-300" },
+              "Use ", React.createElement('span', { className: "text-white font-bold mx-1" }, "WASD"),
+              " or ", React.createElement('span', { className: "text-white font-bold mx-1" }, "Arrows"), " to move"
+            )
+          ),
+
+          // Menus
+          React.createElement('div', { className: "flex items-center justify-center pointer-events-auto" },
+            gameState === GameState.MENU && React.createElement('div', { className: "text-center animate-in fade-in zoom-in duration-300 bg-black/40 p-8 rounded-2xl backdrop-blur-sm border border-white/10" },
+              React.createElement('h2', { className: "text-4xl md:text-6xl pixel-font text-white mb-8 drop-shadow-lg" }, "READY?"),
+              React.createElement('button', {
+                onClick: resetGame,
+                className: "group relative px-8 py-4 bg-emerald-500 hover:bg-emerald-400 transition-all rounded-lg font-bold text-xl flex items-center justify-center gap-3 mx-auto shadow-[0_0_40px_-10px_rgba(16,185,129,0.5)] hover:shadow-[0_0_60px_-10px_rgba(16,185,129,0.7)] hover:-translate-y-1 text-white"
+              }, "START GAME"),
+              React.createElement('p', { className: "mt-6 text-slate-300 text-sm font-inter" }, "Hunt the castles. Grow the beast.")
+            ),
+
+            gameState === GameState.GAME_OVER && React.createElement('div', { className: "text-center animate-in slide-in-from-bottom-10 duration-300 bg-black/60 p-10 rounded-3xl backdrop-blur-md border border-red-500/30" },
+              React.createElement('div', { className: "text-6xl mb-6" }, "☠️"),
+              React.createElement('h2', { className: "text-4xl md:text-5xl pixel-font text-white mb-2" }, "GAME OVER"),
+              React.createElement('p', { className: "text-xl text-red-200 mb-8 font-inter" }, "Your reign has ended."),
+              React.createElement('div', { className: "flex flex-col gap-4" },
+                React.createElement('p', { className: "text-emerald-400 font-mono text-xl" }, `Score: ${score}`),
+                React.createElement('button', {
+                  onClick: resetGame,
+                  className: "px-8 py-3 bg-white text-red-900 hover:bg-gray-100 transition-colors rounded-lg font-bold text-lg shadow-lg"
+                }, "TRY AGAIN"),
+                React.createElement('button', {
+                  onClick: () => setGameState(GameState.MENU),
+                  className: "text-sm text-slate-400 hover:text-white underline underline-offset-4"
+                }, "Back to Menu")
+              )
+            )
+          ),
+          React.createElement('div', null) // Spacer
+        )
+      );
+    };
+
+    const root = ReactDOMClient.createRoot(document.getElementById('root'));
+    root.render(React.createElement(App));
   </script>
 </body>
 </html>
