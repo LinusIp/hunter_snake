@@ -269,6 +269,61 @@
       );
     };
 
+    // ============ WEATHER VFX COMPONENT ============
+    const WeatherVFX = ({ count, color, size, speed, area, sway, glow, windX, windZ }) => {
+      const pointsRef = useRef(null);
+      
+      const geom = useMemo(() => {
+        const g = new THREE.BufferGeometry();
+        const arr = new Float32Array(count * 3);
+        for (let i = 0; i < count; i++) {
+          arr[i * 3] = (Math.random() - 0.5) * area;
+          arr[i * 3 + 1] = Math.random() * area;
+          arr[i * 3 + 2] = (Math.random() - 0.5) * area;
+        }
+        g.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+        return g;
+      }, [count, area]);
+
+      useFrame((state, delta) => {
+        if (!pointsRef.current) return;
+        const posArr = pointsRef.current.geometry.attributes.position.array;
+        const time = state.clock.getElapsedTime();
+        
+        for (let i = 0; i < count; i++) {
+          const idx = i * 3;
+          posArr[idx + 1] -= speed * delta; // Falling
+          posArr[idx] += Math.sin(time + i) * sway * delta + (windX || 0) * delta; // Swaying + Wind
+          posArr[idx + 2] += Math.cos(time + i * 0.5) * sway * delta + (windZ || 0) * delta;
+
+          // Wrap around when hitting the ground
+          if (posArr[idx + 1] < -1) {
+            posArr[idx + 1] = area / 2;
+            posArr[idx] = (Math.random() - 0.5) * area;
+            posArr[idx + 2] = (Math.random() - 0.5) * area;
+          }
+          // Wrap around X and Z bounds
+          if (posArr[idx] > area/2) posArr[idx] -= area;
+          else if (posArr[idx] < -area/2) posArr[idx] += area;
+          if (posArr[idx + 2] > area/2) posArr[idx + 2] -= area;
+          else if (posArr[idx + 2] < -area/2) posArr[idx + 2] += area;
+        }
+        pointsRef.current.geometry.attributes.position.needsUpdate = true;
+      });
+
+      return React.createElement('points', { ref: pointsRef, geometry: geom },
+        React.createElement('pointsMaterial', {
+          color: color,
+          size: size,
+          transparent: true,
+          opacity: 0.8,
+          depthWrite: false,
+          sizeAttenuation: true,
+          blending: glow ? THREE.AdditiveBlending : THREE.NormalBlending
+        })
+      );
+    };
+
     // ============ CASTLE COMPONENT (VARIATIONS) ============
     const Castle = ({ position, theme }) => {
       const ref = useRef(null);
@@ -337,12 +392,10 @@
               React.createElement('meshStandardMaterial', roofMatProps)
             )
           )),
-          // Central spire
           React.createElement('mesh', { position: [0, 0.6, 0] },
             React.createElement('coneGeometry', { args: [0.3, 0.9, 4] }),
             React.createElement('meshStandardMaterial', roofMatProps)
           ),
-          // Eerie glowing orb
           React.createElement('mesh', { position: [0, 1.2, 0] },
             React.createElement('sphereGeometry', { args: [0.12, 16, 16] }),
             React.createElement('meshStandardMaterial', { color: theme.castleAccent, emissive: theme.castleAccent, emissiveIntensity: 1.5 })
@@ -361,12 +414,10 @@
               React.createElement('meshStandardMaterial', roofMatProps)
             )
           )),
-          // Central dome
           React.createElement('mesh', { position: [0, 0.4, 0] },
             React.createElement('sphereGeometry', { args: [0.35, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2] }),
             React.createElement('meshStandardMaterial', roofMatProps)
           ),
-          // Spire
           React.createElement('mesh', { position: [0, 0.8, 0] },
             React.createElement('coneGeometry', { args: [0.05, 0.3, 6] }),
             React.createElement('meshStandardMaterial', { color: theme.castleAccent })
@@ -383,12 +434,10 @@
             React.createElement('octahedronGeometry', { args: [0.3, 0] }),
             React.createElement('meshStandardMaterial', { ...roofMatProps, flatShading: true })
           )),
-          // Central crystal spire
           React.createElement('mesh', { position: [0, 0.5, 0], castShadow: true },
             React.createElement('coneGeometry', { args: [0.4, 1.1, 4] }),
             React.createElement('meshStandardMaterial', { ...roofMatProps, flatShading: true })
           ),
-          // Glowing icy core
           React.createElement('mesh', { position: [0, 0.1, 0] },
             React.createElement('sphereGeometry', { args: [0.15, 16, 16] }),
             React.createElement('meshStandardMaterial', { color: theme.castleAccent, emissive: theme.castleAccent, emissiveIntensity: 1.5, transparent: true, opacity: 0.8 })
@@ -406,25 +455,21 @@
               React.createElement('coneGeometry', { args: [0.25, 0.5, 4] }),
               React.createElement('meshStandardMaterial', { ...roofMatProps, flatShading: true })
             ),
-            // Lava glow at the top of the tower
             React.createElement('mesh', { position: [0, 0.7, 0] },
               React.createElement('sphereGeometry', { args: [0.07, 8, 8] }),
               React.createElement('meshStandardMaterial', { color: theme.castleAccent, emissive: theme.castleAccent, emissiveIntensity: 2 })
             )
           )),
-          // Central jagged rock
           React.createElement('mesh', { position: [0, 0.3, 0], castShadow: true },
             React.createElement('coneGeometry', { args: [0.4, 0.8, 4] }),
             React.createElement('meshStandardMaterial', { ...baseMatProps, flatShading: true })
           ),
-          // Central lava pool/glow
           React.createElement('mesh', { position: [0, 0.7, 0] },
             React.createElement('sphereGeometry', { args: [0.12, 16, 16] }),
             React.createElement('meshStandardMaterial', { color: theme.castleAccent, emissive: theme.castleAccent, emissiveIntensity: 2 })
           )
         ),
 
-        // Point light for all castles to make them pop in the dark
         React.createElement('pointLight', { position: [0, 1, 0], intensity: 0.6, color: theme.castleAccent, distance: 5 })
       );
     };
@@ -635,6 +680,16 @@
           !isNight && React.createElement('pointLight', { intensity: 1, distance: 200, color: theme.sunColor })
         ),
         isNight && React.createElement(Stars, { radius: 80, depth: 50, count: 3000, factor: 4, saturation: 0, fade: true, speed: 0.5 }),
+        
+        // ====== LEVEL-SPECIFIC WEATHER VFX ======
+        mode === ThemeMode.VALLEY && React.createElement(WeatherVFX, { count: 150, color: "#84cc16", size: 0.25, speed: 1.5, area: 30, sway: 1.8, glow: false, windX: 0.5, windZ: 0.5 }),
+        mode === ThemeMode.DESERT && React.createElement(WeatherVFX, { count: 600, color: "#fbbf24", size: 0.08, speed: 4.0, area: 30, sway: 0.5, glow: true, windX: 2.0, windZ: 0.5 }),
+        mode === ThemeMode.FROZEN && React.createElement(WeatherVFX, { count: 1000, color: "#ffffff", size: 0.12, speed: 2.5, area: 30, sway: 0.8, glow: true, windX: 0.5, windZ: 0.0 }),
+        mode === ThemeMode.VOLCANO && React.createElement(React.Fragment, null,
+          React.createElement(WeatherVFX, { count: 400, color: "#4b5563", size: 0.12, speed: 3.0, area: 30, sway: 0.2, glow: false, windX: 1.0, windZ: 0.0 }),
+          React.createElement(WeatherVFX, { count: 100, color: "#fb923c", size: 0.15, speed: 1.2, area: 30, sway: 0.6, glow: true, windX: 1.0, windZ: 0.0 })
+        ),
+        
         trees,
         React.createElement('group', { position: theme.windmillPos, rotation: [0, isNight ? Math.PI / 4 : -Math.PI / 4, 0] },
           React.createElement(Windmill, { position: [0, 0, 0], color: theme.windmillColor })
@@ -711,7 +766,6 @@
       const [humans, setHumans] = useState([]);
       const [directionState, setDirectionState] = useState(INITIAL_DIRECTION);
 
-      // Refs for game loop
       const snakeRef = useRef([...INITIAL_SNAKE]);
       const directionRef = useRef(INITIAL_DIRECTION);
       const inputQueueRef = useRef([]);
@@ -840,7 +894,6 @@
       const gameLoop = useCallback((time) => {
         if (gameStateRef.current !== GameState.PLAYING) return;
 
-        // Move humans periodically
         if (time - lastHumanMoveRef.current > CONFIG.humanMoveInterval) {
           const occupied = [...snakeRef.current, foodRef.current];
           const movedHumans = [];
@@ -865,7 +918,6 @@
           lastHumanMoveRef.current = time;
         }
 
-        // Decay invincibility
         if (time > invincibilityEndRef.current && invincibilityEndRef.current > 0) {
           invincibilityEndRef.current = 0;
           setInvincible(false);
@@ -884,7 +936,6 @@
             case Direction.LEFT: newHead.x -= 1; break;
             case Direction.RIGHT: newHead.x += 1; break;
           }
-          // Boundary
           if (newHead.x < -GRID_SIZE || newHead.x > GRID_SIZE || newHead.z < -GRID_SIZE || newHead.z > GRID_SIZE) {
             playSound('die'); setGameState(GameState.GAME_OVER); gameStateRef.current = GameState.GAME_OVER;
             if (requestRef.current) cancelAnimationFrame(requestRef.current); return;
@@ -895,7 +946,6 @@
             playSound('die'); setGameState(GameState.GAME_OVER); gameStateRef.current = GameState.GAME_OVER;
             if (requestRef.current) cancelAnimationFrame(requestRef.current); return;
           }
-          // Human collision
           const humanHitIndex = humansRef.current.findIndex(h => h.x === newHead.x && h.z === newHead.z);
           if (humanHitIndex !== -1 && invincibilityEndRef.current === 0) {
             playSound('hurt');
@@ -926,7 +976,6 @@
             speedRef.current = Math.max(80, speedRef.current - CONFIG.speedIncrement);
             foodRef.current = getFarRandomPosition([...newSnake, ...humansRef.current], 3);
             setFood({...foodRef.current});
-            // Level complete?
             if (scoreRef.current >= LEVELS[currentLevelRef.current].target) {
               const newUnlocked = Math.max(unlockedLevels, currentLevelRef.current + 2);
               if (newUnlocked > unlockedLevels) {
@@ -974,7 +1023,6 @@
 
       const showGameScene = gameState === GameState.PLAYING || gameState === GameState.GAME_OVER || gameState === GameState.LEVEL_COMPLETE;
 
-      // ====== HEARTS DISPLAY ======
       const Hearts = () => React.createElement('div', { className: "flex gap-1" },
         [...Array(CONFIG.initialHealth)].map((_, i) =>
           React.createElement('span', { key: i, className: "text-xl md:text-2xl" }, i < health ? "❤️" : "🖤")
@@ -982,7 +1030,6 @@
       );
 
       return React.createElement('div', { className: `relative w-full h-full overflow-hidden ${damageFlash ? 'shake' : ''}` },
-        // 3D Layer
         React.createElement('div', { className: "absolute inset-0 z-0" },
           showGameScene
             ? React.createElement(GameScene, {
@@ -993,13 +1040,10 @@
                 themeMode: ThemeMode.VALLEY, skin: selectedSkin, humans: [], invincible: false
               })
         ),
-        // Damage red overlay
         damageFlash && React.createElement('div', { className: "absolute inset-0 z-5 damage-overlay bg-red-600 pointer-events-none" }),
 
-        // UI Layer
         React.createElement('div', { className: "absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-4 md:p-6" },
 
-          // ====== HEADER (during play) ======
           (gameState === GameState.PLAYING || gameState === GameState.GAME_OVER || gameState === GameState.LEVEL_COMPLETE) &&
           React.createElement('div', { className: "flex justify-between items-start gap-2" },
             React.createElement('div', null,
@@ -1007,21 +1051,17 @@
               React.createElement('p', { className: "text-slate-300 text-xs md:text-sm mt-1 font-semibold drop-shadow" }, `${level.icon} ${level.name}`)
             ),
             React.createElement('div', { className: "flex gap-2 md:gap-3 pointer-events-auto items-center flex-wrap justify-end" },
-              // Health
               React.createElement('div', { className: "bg-black/50 backdrop-blur-md px-3 py-2 rounded-xl border border-white/10" },
                 React.createElement(Hearts)
               ),
-              // Score
               React.createElement('div', { className: "bg-black/50 backdrop-blur-md p-2 md:p-3 rounded-xl border border-white/10" },
                 React.createElement('p', { className: "text-[9px] md:text-[10px] text-slate-400 uppercase tracking-wider" }, "Score"),
                 React.createElement('p', { className: "text-base md:text-xl font-mono font-bold text-white" }, `${score}/${level.target}`)
               ),
-              // Best
               React.createElement('div', { className: "bg-black/50 backdrop-blur-md p-2 md:p-3 rounded-xl border border-white/10" },
                 React.createElement('p', { className: "text-[9px] md:text-[10px] text-slate-400 uppercase tracking-wider" }, "Best"),
                 React.createElement('p', { className: "text-base md:text-xl font-mono font-bold text-white" }, highScore)
               ),
-              // Quit button
               gameState === GameState.PLAYING && React.createElement('button', {
                 onClick: quitToMenu,
                 className: "p-2 md:p-3 rounded-xl bg-red-900/60 border border-red-500/30 text-red-200 hover:bg-red-800/60 transition-colors text-sm font-bold",
@@ -1030,7 +1070,6 @@
             )
           ),
 
-          // Progress bar during play
           gameState === GameState.PLAYING && React.createElement('div', { className: "self-center w-64 md:w-96 mt-2" },
             React.createElement('div', { className: "h-2 bg-black/50 rounded-full overflow-hidden border border-white/10" },
               React.createElement('div', {
@@ -1040,7 +1079,6 @@
             )
           ),
 
-          // Controls hint
           gameState === GameState.PLAYING && showHint && React.createElement('div', { className: "self-center text-center mt-4" },
             React.createElement('div', { className: "bg-black/40 backdrop-blur-sm px-5 py-2 rounded-full border border-white/5 text-xs md:text-sm text-slate-300" },
               "Use ", React.createElement('span', { className: "text-white font-bold mx-1" }, "WASD"),
@@ -1049,13 +1087,11 @@
             )
           ),
 
-          // ====== MENU SCREEN ======
           gameState === GameState.MENU && React.createElement('div', { className: "flex items-center justify-center h-full pointer-events-auto" },
             React.createElement('div', { className: "text-center float-in bg-black/50 p-8 md:p-12 rounded-3xl backdrop-blur-md border border-white/10 max-w-md" },
               React.createElement('h1', { className: "text-3xl md:text-5xl pixel-font text-emerald-400 mb-3 drop-shadow-lg" }, "CASTLE"),
               React.createElement('h1', { className: "text-3xl md:text-5xl pixel-font text-white mb-2 drop-shadow-lg" }, "HUNTER"),
               React.createElement('p', { className: "text-slate-400 text-sm mb-6 font-inter" }, "VOXEL EDITION · 5 REALMS"),
-              // Current skin preview
               React.createElement('div', { className: "flex items-center justify-center gap-3 mb-6 bg-black/30 rounded-xl p-3 border border-white/5" },
                 React.createElement(SkinPreview, { skin: selectedSkin, size: 36 }),
                 React.createElement('div', { className: "text-left" },
@@ -1077,7 +1113,6 @@
             )
           ),
 
-          // ====== LEVEL SELECT SCREEN ======
           gameState === GameState.LEVEL_SELECT && React.createElement('div', { className: "flex items-center justify-center h-full pointer-events-auto" },
             React.createElement('div', { className: "float-in bg-black/60 p-6 md:p-8 rounded-3xl backdrop-blur-md border border-white/10 max-w-2xl w-full mx-4" },
               React.createElement('h2', { className: "text-2xl md:text-3xl pixel-font text-white mb-2 text-center" }, "SELECT REALM"),
@@ -1115,7 +1150,6 @@
             )
           ),
 
-          // ====== SKIN SELECT SCREEN ======
           gameState === GameState.SKIN_SELECT && React.createElement('div', { className: "flex items-center justify-center h-full pointer-events-auto" },
             React.createElement('div', { className: "float-in bg-black/60 p-6 md:p-8 rounded-3xl backdrop-blur-md border border-white/10 max-w-2xl w-full mx-4" },
               React.createElement('h2', { className: "text-2xl md:text-3xl pixel-font text-white mb-2 text-center" }, "CHOOSE SKIN"),
@@ -1147,7 +1181,6 @@
             )
           ),
 
-          // ====== GAME OVER SCREEN ======
           gameState === GameState.GAME_OVER && React.createElement('div', { className: "flex items-center justify-center h-full pointer-events-auto" },
             React.createElement('div', { className: "float-in text-center bg-black/70 p-8 md:p-10 rounded-3xl backdrop-blur-md border border-red-500/30 max-w-sm" },
               React.createElement('div', { className: "text-6xl mb-4" }, "☠️"),
@@ -1180,7 +1213,6 @@
             )
           ),
 
-          // ====== LEVEL COMPLETE SCREEN ======
           gameState === GameState.LEVEL_COMPLETE && React.createElement('div', { className: "flex items-center justify-center h-full pointer-events-auto" },
             React.createElement('div', { className: "float-in text-center bg-black/70 p-8 md:p-10 rounded-3xl backdrop-blur-md border border-emerald-400/40 max-w-sm" },
               React.createElement('div', { className: "text-6xl mb-4" }, "🏆"),
