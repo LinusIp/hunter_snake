@@ -63,7 +63,7 @@
     // ============ TYPES ============
     const Direction = { UP: "UP", DOWN: "DOWN", LEFT: "LEFT", RIGHT: "RIGHT" };
     const GameState = {
-      MENU: "MENU", LEVEL_SELECT: "LEVEL_SELECT", SKIN_SELECT: "SKIN_SELECT",
+      MENU: "MENU", LEVEL_SELECT: "LEVEL_SELECT", SHOP: "SHOP",
       PLAYING: "PLAYING", GAME_OVER: "GAME_OVER", LEVEL_COMPLETE: "LEVEL_COMPLETE"
     };
     const ThemeMode = {
@@ -78,18 +78,20 @@
       speedIncrement: 12,
       initialHealth: 3,
       humanMoveInterval: 1400,
-      invincibilityDuration: 1200
+      invincibilityDuration: 1200,
+      coinPerCastle: 10,
+      coinPerLevelClear: 50
     };
     const GRID_COLOR = "#1f2937";
 
-    // ============ SKINS (6 skins) ============
+    // ============ SKINS (6 skins with prices) ============
     const SKINS = [
-      { id: "classic", name: "Emerald",    head: "#10b981", body: "#065f46", eye: "#ff0000", accent: "#fde047", desc: "The forest guardian" },
-      { id: "fire",    name: "Inferno",    head: "#fb923c", body: "#dc2626", eye: "#fef3c7", accent: "#fde047", desc: "Born from the flames" },
-      { id: "ice",     name: "Glacier",    head: "#22d3ee", body: "#0e7490", eye: "#ffffff", accent: "#bae6fd", desc: "Frozen heart, sharp fangs" },
-      { id: "gold",    name: "Midas",      head: "#fbbf24", body: "#d97706", eye: "#000000", accent: "#fff7ed", desc: "Royal and radiant" },
-      { id: "void",    name: "Voidling",   head: "#a855f7", body: "#4c1d95", eye: "#f0abfc", accent: "#fef08a", desc: "From beyond the stars" },
-      { id: "shadow",  name: "Nightshade", head: "#4b5563", body: "#111827", eye: "#ef4444", accent: "#9ca3af", desc: "Silent and deadly" }
+      { id: "classic", name: "Emerald",    price: 0,   head: "#10b981", body: "#065f46", eye: "#ff0000", accent: "#fde047", desc: "The forest guardian" },
+      { id: "fire",    name: "Inferno",    price: 100, head: "#fb923c", body: "#dc2626", eye: "#fef3c7", accent: "#fde047", desc: "Born from the flames" },
+      { id: "ice",     name: "Glacier",    price: 100, head: "#22d3ee", body: "#0e7490", eye: "#ffffff", accent: "#bae6fd", desc: "Frozen heart, sharp fangs" },
+      { id: "gold",    name: "Midas",      price: 250, head: "#fbbf24", body: "#d97706", eye: "#000000", accent: "#fff7ed", desc: "Royal and radiant" },
+      { id: "void",    name: "Voidling",   price: 400, head: "#a855f7", body: "#4c1d95", eye: "#f0abfc", accent: "#fef08a", desc: "From beyond the stars" },
+      { id: "shadow",  name: "Nightshade", price: 500, head: "#4b5563", body: "#111827", eye: "#ef4444", accent: "#9ca3af", desc: "Silent and deadly" }
     ];
 
     // ============ LEVELS (6 levels) ============
@@ -142,14 +144,14 @@
       },
       [ThemeMode.FROZEN]: {
         sky: "#cffafe", ground: "#f0f9ff", grid: "#bae6fd",
-        ambientIntensity: 1.0, lightColor: "#ffffff",
+        ambientIntensity: 1.2, lightColor: "#ffffff",
         sunColor: "#ffffff", sunPosition: [40, 15, -40],
         fogColor: "#e0f2fe", fogNear: 15, fogFar: 70,
         treeColor: "#0c4a6e", hillColor: "#e0f2fe",
         windmillColor: "#0369a1", windmillPos: [-15, 0, -5],
         isNight: false, cactus: false,
         castleStyle: "ice",
-        castleBase: "#0c4a6e", castleRoof: "#7dd3fc", castleAccent: "#ffffff",
+        castleBase: "#38bdf8", castleRoof: "#ffffff", castleAccent: "#22d3ee",
         humanBody: "#1e40af", humanHead: "#dbeafe", humanAccent: "#0c4a6e"
       },
       [ThemeMode.VOLCANO]: {
@@ -348,15 +350,9 @@
       });
 
       const style = theme.castleStyle || 'classic';
-      const isIce = style === 'ice';
       
-      const baseMatProps = isIce 
-        ? { color: theme.castleBase, roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.85 }
-        : { color: theme.castleBase, roughness: 0.8, metalness: 0.1 };
-        
-      const roofMatProps = isIce 
-        ? { color: theme.castleRoof, roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.85 }
-        : { color: theme.castleRoof, roughness: 0.6, metalness: 0.1 };
+      const baseMatProps = { color: theme.castleBase, roughness: 0.8, metalness: 0.1 };
+      const roofMatProps = { color: theme.castleRoof, roughness: 0.6, metalness: 0.1 };
 
       const corners = [[-0.4, -0.4], [0.4, -0.4], [-0.4, 0.4], [0.4, 0.4]];
 
@@ -441,45 +437,75 @@
           )
         ),
 
-        // 4. ICE CASTLE (Frozen)
+        // 4. ICE CASTLE (Frozen Tundra) - SOLID ICE FORTRESS
         style === 'ice' && React.createElement(React.Fragment, null,
-          corners.map(([x, z], i) => React.createElement('mesh', { key: `i-${i}`, position: [x, 0.4, z], castShadow: true },
-            React.createElement('octahedronGeometry', { args: [0.3, 0] }),
-            React.createElement('meshStandardMaterial', { ...roofMatProps, flatShading: true })
-          )),
-          React.createElement('mesh', { position: [0, 0.5, 0], castShadow: true },
-            React.createElement('coneGeometry', { args: [0.4, 1.1, 4] }),
-            React.createElement('meshStandardMaterial', { ...roofMatProps, flatShading: true })
+          // Main Base (Solid Ice Block)
+          React.createElement('mesh', { position: [0, -0.1, 0], castShadow: true, receiveShadow: true },
+            React.createElement('boxGeometry', { args: [0.8, 0.5, 0.8] }),
+            React.createElement('meshStandardMaterial', { color: "#93c5fd", roughness: 0.4, metalness: 0.2, flatShading: true })
           ),
+          // Corner Towers (Solid Ice)
+          corners.map(([x, z], i) => React.createElement('group', { key: `i-${i}`, position: [x, 0.1, z] },
+            React.createElement('mesh', { castShadow: true },
+              React.createElement('cylinderGeometry', { args: [0.18, 0.22, 0.6, 6] }),
+              React.createElement('meshStandardMaterial', { color: "#e0f2fe", roughness: 0.3, metalness: 0.1, flatShading: true })
+            ),
+            // Icy Spire Roof
+            React.createElement('mesh', { position: [0, 0.4, 0] },
+              React.createElement('coneGeometry', { args: [0.22, 0.5, 6] }),
+              React.createElement('meshStandardMaterial', { color: "#bae6fd", roughness: 0.2, metalness: 0.1, flatShading: true })
+            )
+          )),
+          // Central Keep (Large Ice Crystal)
+          React.createElement('mesh', { position: [0, 0.4, 0], castShadow: true },
+            React.createElement('coneGeometry', { args: [0.4, 1.0, 6] }),
+            React.createElement('meshStandardMaterial', { color: "#38bdf8", roughness: 0.2, metalness: 0.3, flatShading: true })
+          ),
+          // Glowing Frozen Heart
           React.createElement('mesh', { position: [0, 0.1, 0] },
             React.createElement('sphereGeometry', { args: [0.15, 16, 16] }),
-            React.createElement('meshStandardMaterial', { color: theme.castleAccent, emissive: theme.castleAccent, emissiveIntensity: 1.5, transparent: true, opacity: 0.8 })
+            React.createElement('meshStandardMaterial', { color: "#ffffff", emissive: "#7dd3fc", emissiveIntensity: 3 })
           )
         ),
 
-        // 5. VOLCANIC CASTLE (Volcano)
+        // 5. VOLCANIC CASTLE (Volcano Core) - SOLID ROCK FORTRESS
         style === 'volcanic' && React.createElement(React.Fragment, null,
+          // Main Base (Solid Volcanic Rock)
+          React.createElement('mesh', { position: [0, -0.1, 0], castShadow: true, receiveShadow: true },
+            React.createElement('boxGeometry', { args: [0.8, 0.5, 0.8] }),
+            React.createElement('meshStandardMaterial', { color: "#4b5563", roughness: 0.9, metalness: 0.1, flatShading: true })
+          ),
+          // Corner Towers (Obsidian Rocks)
           corners.map(([x, z], i) => React.createElement('group', { key: `v-${i}`, position: [x, 0.15, z] },
             React.createElement('mesh', { castShadow: true },
-              React.createElement('cylinderGeometry', { args: [0.2, 0.15, 0.7, 5] }),
-              React.createElement('meshStandardMaterial', { ...baseMatProps, flatShading: true })
+              React.createElement('cylinderGeometry', { args: [0.2, 0.25, 0.7, 5] }),
+              React.createElement('meshStandardMaterial', { color: "#3f3f46", roughness: 0.9, metalness: 0.1, flatShading: true })
             ),
+            // Jagged Rock Roof
             React.createElement('mesh', { position: [0, 0.45, 0] },
-              React.createElement('coneGeometry', { args: [0.25, 0.5, 4] }),
-              React.createElement('meshStandardMaterial', { ...roofMatProps, flatShading: true })
+              React.createElement('coneGeometry', { args: [0.28, 0.6, 5] }),
+              React.createElement('meshStandardMaterial', { color: "#292524", roughness: 0.9, metalness: 0.1, flatShading: true })
             ),
-            React.createElement('mesh', { position: [0, 0.7, 0] },
-              React.createElement('sphereGeometry', { args: [0.07, 8, 8] }),
-              React.createElement('meshStandardMaterial', { color: theme.castleAccent, emissive: theme.castleAccent, emissiveIntensity: 2 })
+            // Glowing Lava Vent on top
+            React.createElement('mesh', { position: [0, 0.78, 0] },
+              React.createElement('sphereGeometry', { args: [0.08, 8, 8] }),
+              React.createElement('meshStandardMaterial', { color: "#fb923c", emissive: "#ef4444", emissiveIntensity: 2 })
             )
           )),
+          // Central Jagged Keep (Large Volcanic Rock)
           React.createElement('mesh', { position: [0, 0.3, 0], castShadow: true },
-            React.createElement('coneGeometry', { args: [0.4, 0.8, 4] }),
-            React.createElement('meshStandardMaterial', { ...baseMatProps, flatShading: true })
+            React.createElement('coneGeometry', { args: [0.45, 1.0, 5] }),
+            React.createElement('meshStandardMaterial', { color: "#1c1917", roughness: 0.9, metalness: 0.1, flatShading: true })
           ),
+          // Glowing Lava Core
           React.createElement('mesh', { position: [0, 0.7, 0] },
-            React.createElement('sphereGeometry', { args: [0.12, 16, 16] }),
-            React.createElement('meshStandardMaterial', { color: theme.castleAccent, emissive: theme.castleAccent, emissiveIntensity: 2 })
+            React.createElement('sphereGeometry', { args: [0.14, 16, 16] }),
+            React.createElement('meshStandardMaterial', { color: "#fb923c", emissive: "#ef4444", emissiveIntensity: 2.5 })
+          ),
+          // Lava Cracks on base
+          React.createElement('mesh', { position: [0, 0.16, 0], rotation: [-Math.PI/2, 0, 0] },
+            React.createElement('ringGeometry', { args: [0.2, 0.35, 16] }),
+            React.createElement('meshStandardMaterial', { color: "#fb923c", emissive: "#ef4444", emissiveIntensity: 2, side: 2 })
           )
         ),
 
@@ -810,6 +836,8 @@
       const [gameState, setGameState] = useState(GameState.MENU);
       const [score, setScore] = useState(0);
       const [highScore, setHighScore] = useState(0);
+      const [coins, setCoins] = useState(0);
+      const [ownedSkins, setOwnedSkins] = useState(["classic"]);
       const [currentLevel, setCurrentLevel] = useState(0);
       const [unlockedLevels, setUnlockedLevels] = useState(1);
       const [selectedSkin, setSelectedSkin] = useState(SKINS[0]);
@@ -823,6 +851,7 @@
       const [humans, setHumans] = useState([]);
       const [directionState, setDirectionState] = useState(INITIAL_DIRECTION);
 
+      // Refs for game loop
       const snakeRef = useRef([...INITIAL_SNAKE]);
       const directionRef = useRef(INITIAL_DIRECTION);
       const inputQueueRef = useRef([]);
@@ -844,6 +873,7 @@
       const eatSound = useRef(null);
       const dieSound = useRef(null);
       const hurtSound = useRef(null);
+      const buySound = useRef(null);
 
       useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
 
@@ -851,32 +881,52 @@
         try {
           const loadHigh = localStorage.getItem("ch_high");
           if (loadHigh) setHighScore(parseInt(loadHigh, 10));
-          const loadUnlocked = localStorage.getItem("ch_unlocked");
-          if (loadUnlocked) setUnlockedLevels(parseInt(loadUnlocked, 10));
+          
+          const loadCoins = localStorage.getItem("ch_coins");
+          if (loadCoins) setCoins(parseInt(loadCoins, 10) || 0);
+          
+          let parsedOwned = ["classic"];
+          const loadOwned = localStorage.getItem("ch_owned_skins");
+          if (loadOwned) {
+            try {
+              const arr = JSON.parse(loadOwned);
+              if (Array.isArray(arr) && arr.length > 0) parsedOwned = arr;
+            } catch (e) {}
+          }
+          if (!parsedOwned.includes("classic")) parsedOwned.push("classic");
+          setOwnedSkins(parsedOwned);
+
           const loadSkin = localStorage.getItem("ch_skin");
           if (loadSkin) {
             const s = SKINS.find(s => s.id === loadSkin);
-            if (s) setSelectedSkin(s);
+            if (s && parsedOwned.includes(s.id)) setSelectedSkin(s);
           }
+
+          const loadUnlocked = localStorage.getItem("ch_unlocked");
+          if (loadUnlocked) setUnlockedLevels(parseInt(loadUnlocked, 10));
         } catch (e) {}
         
         eatSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3');
         dieSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3');
         hurtSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3');
+        buySound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2016/2016-preview.mp3');
         if (eatSound.current) eatSound.current.volume = 0.25;
         if (dieSound.current) dieSound.current.volume = 0.35;
         if (hurtSound.current) hurtSound.current.volume = 0.3;
+        if (buySound.current) buySound.current.volume = 0.4;
       }, []);
 
-      useEffect(() => {
-        try { localStorage.setItem("ch_skin", selectedSkin.id); } catch (e) {}
-      }, [selectedSkin]);
+      const saveCoins = (val) => { try { localStorage.setItem("ch_coins", String(val)); } catch (e) {} };
+      const saveOwnedSkins = (val) => { try { localStorage.setItem("ch_owned_skins", JSON.stringify(val)); } catch (e) {} };
+      
+      useEffect(() => { try { localStorage.setItem("ch_skin", selectedSkin.id); } catch (e) {} }, [selectedSkin]);
 
       const playSound = (type) => {
         try {
           if (type === 'eat' && eatSound.current) { eatSound.current.currentTime = 0; eatSound.current.play().catch(() => {}); }
           if (type === 'die' && dieSound.current) { dieSound.current.currentTime = 0; dieSound.current.play().catch(() => {}); }
           if (type === 'hurt' && hurtSound.current) { hurtSound.current.currentTime = 0; hurtSound.current.play().catch(() => {}); }
+          if (type === 'buy' && buySound.current) { buySound.current.currentTime = 0; buySound.current.play().catch(() => {}); }
         } catch (e) {}
       };
 
@@ -1026,6 +1076,7 @@
             playSound('eat');
             scoreRef.current += 1;
             setScore(scoreRef.current);
+            setCoins(c => { const nc = c + CONFIG.coinPerCastle; saveCoins(nc); return nc; });
             if (scoreRef.current > highScore) {
               setHighScore(scoreRef.current);
               try { localStorage.setItem("ch_high", String(scoreRef.current)); } catch (e) {}
@@ -1039,6 +1090,7 @@
                 setUnlockedLevels(newUnlocked);
                 try { localStorage.setItem("ch_unlocked", String(newUnlocked)); } catch (e) {}
               }
+              setCoins(c => { const nc = c + CONFIG.coinPerLevelClear; saveCoins(nc); return nc; });
               setGameState(GameState.LEVEL_COMPLETE);
               gameStateRef.current = GameState.LEVEL_COMPLETE;
               if (requestRef.current) cancelAnimationFrame(requestRef.current);
@@ -1116,6 +1168,10 @@
                 React.createElement('p', { className: "text-base md:text-xl font-mono font-bold text-white" }, `${score}/${level.target}`)
               ),
               React.createElement('div', { className: "bg-black/50 backdrop-blur-md p-2 md:p-3 rounded-xl border border-white/10" },
+                React.createElement('p', { className: "text-[9px] md:text-[10px] text-slate-400 uppercase tracking-wider" }, "Coins"),
+                React.createElement('p', { className: "text-base md:text-xl font-mono font-bold text-yellow-400" }, `🪙 ${coins}`)
+              ),
+              React.createElement('div', { className: "bg-black/50 backdrop-blur-md p-2 md:p-3 rounded-xl border border-white/10" },
                 React.createElement('p', { className: "text-[9px] md:text-[10px] text-slate-400 uppercase tracking-wider" }, "Best"),
                 React.createElement('p', { className: "text-base md:text-xl font-mono font-bold text-white" }, highScore)
               ),
@@ -1144,6 +1200,7 @@
             )
           ),
 
+          // ====== MENU SCREEN ======
           gameState === GameState.MENU && React.createElement('div', { className: "flex items-center justify-center h-full pointer-events-auto" },
             React.createElement('div', { className: "text-center float-in bg-black/50 p-8 md:p-12 rounded-3xl backdrop-blur-md border border-white/10 max-w-md" },
               React.createElement('h1', { className: "text-3xl md:text-5xl pixel-font text-emerald-400 mb-3 drop-shadow-lg" }, "CASTLE"),
@@ -1154,6 +1211,10 @@
                 React.createElement('div', { className: "text-left" },
                   React.createElement('p', { className: "text-[10px] text-slate-500 uppercase" }, "Current Skin"),
                   React.createElement('p', { className: "text-white font-bold text-sm" }, selectedSkin.name)
+                ),
+                React.createElement('div', { className: "ml-4 text-left" },
+                  React.createElement('p', { className: "text-[10px] text-slate-500 uppercase" }, "Coins"),
+                  React.createElement('p', { className: "text-yellow-400 font-bold text-sm" }, `🪙 ${coins}`)
                 )
               ),
               React.createElement('div', { className: "flex flex-col gap-3" },
@@ -1162,14 +1223,15 @@
                   className: "px-8 py-4 bg-emerald-500 hover:bg-emerald-400 transition-all rounded-lg font-bold text-lg shadow-[0_0_40px_-10px_rgba(16,185,129,0.5)] hover:shadow-[0_0_60px_-10px_rgba(16,185,129,0.7)] hover:-translate-y-0.5 text-white"
                 }, "▶ PLAY"),
                 React.createElement('button', {
-                  onClick: () => setGameState(GameState.SKIN_SELECT),
-                  className: "px-8 py-3 bg-white/10 hover:bg-white/20 transition-all rounded-lg font-bold text-base text-white border border-white/10"
-                }, "🎨 SKINS"),
+                  onClick: () => setGameState(GameState.SHOP),
+                  className: "px-8 py-3 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 transition-all rounded-lg font-bold text-base"
+                }, "🛒 SHOP"),
                 React.createElement('p', { className: "text-slate-400 text-xs mt-2" }, `Best Score: ${highScore} · Realms Unlocked: ${unlockedLevels}/6`)
               )
             )
           ),
 
+          // ====== LEVEL SELECT SCREEN ======
           gameState === GameState.LEVEL_SELECT && React.createElement('div', { className: "flex items-center justify-center h-full pointer-events-auto" },
             React.createElement('div', { className: "float-in bg-black/60 p-6 md:p-8 rounded-3xl backdrop-blur-md border border-white/10 max-w-2xl w-full mx-4" },
               React.createElement('h2', { className: "text-2xl md:text-3xl pixel-font text-white mb-2 text-center" }, "SELECT REALM"),
@@ -1207,29 +1269,58 @@
             )
           ),
 
-          gameState === GameState.SKIN_SELECT && React.createElement('div', { className: "flex items-center justify-center h-full pointer-events-auto" },
+          // ====== SHOP SCREEN ======
+          gameState === GameState.SHOP && React.createElement('div', { className: "flex items-center justify-center h-full pointer-events-auto" },
             React.createElement('div', { className: "float-in bg-black/60 p-6 md:p-8 rounded-3xl backdrop-blur-md border border-white/10 max-w-2xl w-full mx-4" },
-              React.createElement('h2', { className: "text-2xl md:text-3xl pixel-font text-white mb-2 text-center" }, "CHOOSE SKIN"),
-              React.createElement('p', { className: "text-slate-400 text-sm mb-6 text-center" }, "Select your serpent's appearance"),
+              React.createElement('div', { className: "flex justify-between items-center mb-2" },
+                React.createElement('h2', { className: "text-2xl md:text-3xl pixel-font text-white text-center flex-1" }, "🛒 SHOP"),
+                React.createElement('div', { className: "bg-yellow-500/20 border border-yellow-400/30 text-yellow-300 px-3 py-1 rounded-lg font-bold" }, `🪙 ${coins}`)
+              ),
+              React.createElement('p', { className: "text-slate-400 text-sm mb-6 text-center" }, "Eat castles (+10🪙) and clear levels (+50🪙) to earn coins!"),
               React.createElement('div', { className: "grid grid-cols-2 md:grid-cols-3 gap-3" },
-                SKINS.map(skin =>
-                  React.createElement('button', {
+                SKINS.map(skin => {
+                  const owned = ownedSkins.includes(skin.id);
+                  const isSelected = selectedSkin.id === skin.id;
+                  const canAfford = coins >= skin.price;
+                  return React.createElement('div', {
                     key: skin.id,
-                    onClick: () => setSelectedSkin(skin),
-                    className: `p-4 rounded-xl border transition-all ${
-                      selectedSkin.id === skin.id
-                        ? 'bg-emerald-500/20 border-2 border-emerald-400 scale-105'
-                        : 'bg-black/50 border border-white/10 hover:border-white/30 hover:bg-black/70'
+                    className: `p-4 rounded-xl border transition-all flex flex-col items-center justify-between ${
+                      isSelected ? 'bg-emerald-500/20 border-2 border-emerald-400 scale-105' :
+                      owned ? 'bg-black/50 border border-white/10 hover:bg-black/70' :
+                      canAfford ? 'bg-black/50 border border-white/10 hover:border-emerald-400/50 hover:bg-black/70 cursor-pointer' :
+                      'bg-black/40 border border-white/5 opacity-60'
                     }`
                   },
-                    React.createElement('div', { className: "flex justify-center mb-3" },
-                      React.createElement(SkinPreview, { skin: skin, size: 48 })
+                    React.createElement('div', { className: "w-full flex flex-col items-center" },
+                      React.createElement('div', { className: "flex justify-center mb-3" },
+                        React.createElement(SkinPreview, { skin: skin, size: 48 })
+                      ),
+                      React.createElement('p', { className: "text-white font-bold text-sm text-center" }, skin.name),
+                      React.createElement('p', { className: "text-slate-400 text-[10px] text-center mt-1 mb-3" }, skin.desc)
                     ),
-                    React.createElement('p', { className: "text-white font-bold text-sm text-center" }, skin.name),
-                    React.createElement('p', { className: "text-slate-400 text-[10px] text-center mt-1" }, skin.desc),
-                    selectedSkin.id === skin.id && React.createElement('p', { className: "text-emerald-400 text-[10px] text-center mt-2 font-bold" }, "✓ SELECTED")
-                  )
-                )
+                    owned ? (
+                      isSelected ? 
+                        React.createElement('p', { className: "text-emerald-400 text-xs font-bold mt-2" }, "✓ SELECTED") :
+                        React.createElement('button', { 
+                          onClick: () => { setSelectedSkin(skin); }, 
+                          className: "w-full py-1 bg-emerald-500/20 text-emerald-300 text-xs rounded-md font-bold hover:bg-emerald-500/30" 
+                        }, "EQUIP")
+                    ) : (
+                      React.createElement('button', {
+                        onClick: () => {
+                          if (canAfford) {
+                            playSound('buy');
+                            setCoins(c => { const nc = c - skin.price; saveCoins(nc); return nc; });
+                            setOwnedSkins(prev => { const ns = [...prev, skin.id]; saveOwnedSkins(ns); return ns; });
+                            setSelectedSkin(skin);
+                          }
+                        },
+                        disabled: !canAfford,
+                        className: `w-full py-1 text-xs rounded-md font-bold ${canAfford ? 'bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30' : 'bg-slate-700/50 text-slate-500 cursor-not-allowed'}`
+                      }, canAfford ? `BUY (${skin.price} 🪙)` : `NEED ${skin.price} 🪙`)
+                    )
+                  );
+                })
               ),
               React.createElement('button', {
                 onClick: () => setGameState(GameState.MENU),
@@ -1238,6 +1329,7 @@
             )
           ),
 
+          // ====== GAME OVER SCREEN ======
           gameState === GameState.GAME_OVER && React.createElement('div', { className: "flex items-center justify-center h-full pointer-events-auto" },
             React.createElement('div', { className: "float-in text-center bg-black/70 p-8 md:p-10 rounded-3xl backdrop-blur-md border border-red-500/30 max-w-sm" },
               React.createElement('div', { className: "text-6xl mb-4" }, "☠️"),
@@ -1247,6 +1339,10 @@
                 React.createElement('div', null,
                   React.createElement('p', { className: "text-[10px] text-slate-400 uppercase" }, "Score"),
                   React.createElement('p', { className: "text-2xl font-mono font-bold text-emerald-400" }, score)
+                ),
+                React.createElement('div', null,
+                  React.createElement('p', { className: "text-[10px] text-slate-400 uppercase" }, "Coins Earned"),
+                  React.createElement('p', { className: "text-2xl font-mono font-bold text-yellow-400" }, `${score * 10} 🪙`)
                 ),
                 React.createElement('div', null,
                   React.createElement('p', { className: "text-[10px] text-slate-400 uppercase" }, "Realm"),
@@ -1259,9 +1355,9 @@
                   className: "px-8 py-3 bg-white text-red-900 hover:bg-gray-100 transition-colors rounded-lg font-bold text-lg shadow-lg"
                 }, "↻ TRY AGAIN"),
                 React.createElement('button', {
-                  onClick: () => setGameState(GameState.LEVEL_SELECT),
-                  className: "px-8 py-2 bg-white/10 text-white hover:bg-white/20 transition-colors rounded-lg font-bold text-sm"
-                }, "Realm Select"),
+                  onClick: () => setGameState(GameState.SHOP),
+                  className: "px-8 py-2 bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30 transition-colors rounded-lg font-bold text-sm"
+                }, "🛒 Visit Shop"),
                 React.createElement('button', {
                   onClick: quitToMenu,
                   className: "text-sm text-slate-400 hover:text-white underline underline-offset-4 mt-1"
@@ -1270,6 +1366,7 @@
             )
           ),
 
+          // ====== LEVEL COMPLETE SCREEN ======
           gameState === GameState.LEVEL_COMPLETE && React.createElement('div', { className: "flex items-center justify-center h-full pointer-events-auto" },
             React.createElement('div', { className: "float-in text-center bg-black/70 p-8 md:p-10 rounded-3xl backdrop-blur-md border border-emerald-400/40 max-w-sm" },
               React.createElement('div', { className: "text-6xl mb-4" }, "🏆"),
@@ -1278,16 +1375,25 @@
               currentLevel === LEVELS.length - 1
                 ? React.createElement('p', { className: "text-yellow-300 text-sm mb-6 font-bold" }, "★ You've conquered ALL realms! ★")
                 : React.createElement('p', { className: "text-slate-300 mb-6 text-sm" }, `${LEVELS[currentLevel + 1].icon} ${LEVELS[currentLevel + 1].name} unlocked!`),
-              React.createElement('p', { className: "text-emerald-400 font-mono text-xl mb-6" }, `Score: ${score}`),
+              React.createElement('div', { className: "flex justify-center gap-6 mb-6" },
+                React.createElement('div', null,
+                  React.createElement('p', { className: "text-[10px] text-slate-400 uppercase" }, "Score"),
+                  React.createElement('p', { className: "text-2xl font-mono font-bold text-emerald-400" }, score)
+                ),
+                React.createElement('div', null,
+                  React.createElement('p', { className: "text-[10px] text-slate-400 uppercase" }, "Coins Earned"),
+                  React.createElement('p', { className: "text-2xl font-mono font-bold text-yellow-400" }, `${score * 10 + 50} 🪙`)
+                )
+              ),
               React.createElement('div', { className: "flex flex-col gap-3" },
                 currentLevel < LEVELS.length - 1 && React.createElement('button', {
                   onClick: goNextLevel,
                   className: "px-8 py-3 bg-emerald-500 hover:bg-emerald-400 transition-colors rounded-lg font-bold text-lg text-white shadow-lg"
                 }, "▶ NEXT REALM"),
                 React.createElement('button', {
-                  onClick: () => setGameState(GameState.LEVEL_SELECT),
-                  className: "px-8 py-2 bg-white/10 text-white hover:bg-white/20 transition-colors rounded-lg font-bold text-sm"
-                }, "Realm Select"),
+                  onClick: () => setGameState(GameState.SHOP),
+                  className: "px-8 py-2 bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30 transition-colors rounded-lg font-bold text-sm"
+                }, "🛒 Visit Shop"),
                 React.createElement('button', {
                   onClick: quitToMenu,
                   className: "text-sm text-slate-400 hover:text-white underline underline-offset-4 mt-1"
