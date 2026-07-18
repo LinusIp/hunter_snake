@@ -1,33 +1,42 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- Android Icon --> <link rel="icon" type="image/png" sizes="192x192" href="huntersnake.png"> <!-- iOS Icon --> <link rel="apple-touch-icon" href="huntersnake.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="huntersnake.png">
+  <link rel="apple-touch-icon" href="huntersnake.png">
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Castle Hunter 3D: Voxel Edition</title>
-  
-  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-  
   <style>
     html, body, #root { height: 100%; margin: 0; overflow: hidden; background-color: #0f172a; }
     .pixel-font { font-family: 'Press Start 2P', cursive; }
     .font-inter { font-family: 'Inter', sans-serif; }
-    
-    /* Custom Scrollbar for Webkit */
     ::-webkit-scrollbar { width: 8px; }
     ::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
     ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-8px); }
+      40% { transform: translateX(8px); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(4px); }
+    }
+    .shake { animation: shake 0.4s; }
+    @keyframes damage-pulse {
+      0%, 100% { opacity: 0; }
+      50% { opacity: 0.4; }
+    }
+    .damage-overlay { animation: damage-pulse 0.3s; }
+    @keyframes float-in {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .float-in { animation: float-in 0.4s ease-out; }
   </style>
-
-  <!-- Import Map -->
   <script type="importmap">
 {
   "imports": {
@@ -44,8 +53,6 @@
 </head>
 <body>
   <div id="root"></div>
-
-  <!-- Main Application Script -->
   <script type="module">
     import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
     import ReactDOMClient from 'react-dom/client';
@@ -53,81 +60,107 @@
     import { SoftShadows, OrbitControls, Stars, RoundedBox } from '@react-three/drei';
     import * as THREE from 'three';
 
-    // --- TYPES ---
-    const Direction = {
-      UP: "UP",
-      DOWN: "DOWN",
-      LEFT: "LEFT",
-      RIGHT: "RIGHT"
-    };
-
+    // ============ TYPES ============
+    const Direction = { UP: "UP", DOWN: "DOWN", LEFT: "LEFT", RIGHT: "RIGHT" };
     const GameState = {
-      MENU: "MENU",
-      PLAYING: "PLAYING",
-      GAME_OVER: "GAME_OVER"
+      MENU: "MENU", LEVEL_SELECT: "LEVEL_SELECT", SKIN_SELECT: "SKIN_SELECT",
+      PLAYING: "PLAYING", GAME_OVER: "GAME_OVER", LEVEL_COMPLETE: "LEVEL_COMPLETE"
     };
-
     const ThemeMode = {
-      DAY: "DAY",
-      NIGHT: "NIGHT"
+      VALLEY: "VALLEY", NIGHT: "NIGHT", DESERT: "DESERT", FROZEN: "FROZEN", VOLCANO: "VOLCANO"
     };
 
-    // --- CONSTANTS ---
+    // ============ CONSTANTS ============
     const GRID_SIZE = 8;
     const CELL_SIZE = 1;
-    
     const CONFIG = {
       initialSpeed: 300,
-      speedIncrement: 15,
+      speedIncrement: 12,
+      initialHealth: 3,
+      humanMoveInterval: 1400,
+      invincibilityDuration: 1200
     };
+    const GRID_COLOR = "#1f2937";
 
-    const COLORS = {
-      SNAKE_HEAD: "#10b981",
-      SNAKE_BODY: "#065f46",
-      CASTLE_BASE: "#7c3aed",
-      CASTLE_ROOF: "#fb7185",
-      GRID_LINES: "#1f2937",
-    };
+    // ============ SKINS (6 skins) ============
+    const SKINS = [
+      { id: "classic", name: "Emerald",    head: "#10b981", body: "#065f46", eye: "#ff0000", accent: "#fde047", desc: "The forest guardian" },
+      { id: "fire",    name: "Inferno",    head: "#fb923c", body: "#dc2626", eye: "#fef3c7", accent: "#fde047", desc: "Born from the flames" },
+      { id: "ice",     name: "Glacier",    head: "#22d3ee", body: "#0e7490", eye: "#ffffff", accent: "#bae6fd", desc: "Frozen heart, sharp fangs" },
+      { id: "gold",    name: "Midas",      head: "#fbbf24", body: "#d97706", eye: "#000000", accent: "#fff7ed", desc: "Royal and radiant" },
+      { id: "void",    name: "Voidling",   head: "#a855f7", body: "#4c1d95", eye: "#f0abfc", accent: "#fef08a", desc: "From beyond the stars" },
+      { id: "shadow",  name: "Nightshade", head: "#4b5563", body: "#111827", eye: "#ef4444", accent: "#9ca3af", desc: "Silent and deadly" }
+    ];
 
-    // Theme definitions matching the reference images
+    // ============ LEVELS (5 levels) ============
+    const LEVELS = [
+      { id: 1, name: "Green Valley",   theme: ThemeMode.VALLEY,  target: 5,  humans: 1, icon: "🌿" },
+      { id: 2, name: "Midnight Realm", theme: ThemeMode.NIGHT,   target: 7,  humans: 2, icon: "🌙" },
+      { id: 3, name: "Desert Sands",   theme: ThemeMode.DESERT,  target: 9,  humans: 3, icon: "🏜️" },
+      { id: 4, name: "Frozen Tundra",  theme: ThemeMode.FROZEN,  target: 12, humans: 4, icon: "❄️" },
+      { id: 5, name: "Volcano Core",   theme: ThemeMode.VOLCANO, target: 15, humans: 5, icon: "🌋" }
+    ];
+
+    // ============ THEMES (5 environments) ============
     const THEMES = {
-      [ThemeMode.DAY]: {
-        sky: "#f97316", // Orange sky
-        ground: "#bef264", // Lime green ground
-        grid: "#a3e635",
-        ambientIntensity: 0.9,
-        lightColor: "#ffffff",
-        sunColor: "#ffffff", // White sun
-        sunPosition: [-40, 15, -40], // Left side
-        fogColor: "#fed7aa",
-        fogNear: 15,
-        fogFar: 70,
-        treeColor: "#15803d",
-        hillColor: "#84cc16", // Slightly darker lime
-        windmillColor: "#78350f", // Brown
-        windmillPos: [15, 0, -5], // Right side
-        isNight: false
+      [ThemeMode.VALLEY]: {
+        sky: "#f97316", ground: "#bef264", grid: "#a3e635",
+        ambientIntensity: 0.9, lightColor: "#ffffff",
+        sunColor: "#ffffff", sunPosition: [-40, 15, -40],
+        fogColor: "#fed7aa", fogNear: 15, fogFar: 70,
+        treeColor: "#15803d", hillColor: "#84cc16",
+        windmillColor: "#78350f", windmillPos: [15, 0, -5],
+        isNight: false, cactus: false,
+        castleBase: "#7c3aed", castleRoof: "#fb7185", castleAccent: "#fbbf24",
+        humanBody: "#92400e", humanHead: "#fed7aa", humanAccent: "#dc2626"
       },
       [ThemeMode.NIGHT]: {
-        sky: "#2e1065", // Deep purple sky
-        ground: "#3b0764", // Dark purple ground
-        grid: "#581c87",
-        ambientIntensity: 0.4,
-        lightColor: "#c4b5fd",
-        sunColor: "#f8fafc", // Moon
-        sunPosition: [40, 20, -40], // Right side
-        fogColor: "#2e1065",
-        fogNear: 10,
-        fogFar: 60,
-        treeColor: "#7c3aed", // Purple trees
-        hillColor: "#4c1d95", // Violet hills
-        windmillColor: "#4338ca", // Indigo windmill
-        windmillPos: [-15, 0, -5], // Left side
-        isNight: true
+        sky: "#2e1065", ground: "#3b0764", grid: "#581c87",
+        ambientIntensity: 0.4, lightColor: "#c4b5fd",
+        sunColor: "#f8fafc", sunPosition: [40, 20, -40],
+        fogColor: "#2e1065", fogNear: 10, fogFar: 60,
+        treeColor: "#7c3aed", hillColor: "#4c1d95",
+        windmillColor: "#4338ca", windmillPos: [-15, 0, -5],
+        isNight: true, cactus: false,
+        castleBase: "#1e293b", castleRoof: "#7c3aed", castleAccent: "#c4b5fd",
+        humanBody: "#1e1b4b", humanHead: "#c4b5fd", humanAccent: "#a855f7"
+      },
+      [ThemeMode.DESERT]: {
+        sky: "#fde68a", ground: "#fbbf24", grid: "#f59e0b",
+        ambientIntensity: 1.0, lightColor: "#ffffff",
+        sunColor: "#fb923c", sunPosition: [-40, 10, -40],
+        fogColor: "#fef3c7", fogNear: 15, fogFar: 70,
+        treeColor: "#84cc16", hillColor: "#d97706",
+        windmillColor: "#78350f", windmillPos: [15, 0, -5],
+        isNight: false, cactus: true,
+        castleBase: "#b45309", castleRoof: "#dc2626", castleAccent: "#fde68a",
+        humanBody: "#92400e", humanHead: "#fde68a", humanAccent: "#b91c1c"
+      },
+      [ThemeMode.FROZEN]: {
+        sky: "#cffafe", ground: "#f0f9ff", grid: "#bae6fd",
+        ambientIntensity: 1.0, lightColor: "#ffffff",
+        sunColor: "#ffffff", sunPosition: [40, 15, -40],
+        fogColor: "#e0f2fe", fogNear: 15, fogFar: 70,
+        treeColor: "#0c4a6e", hillColor: "#e0f2fe",
+        windmillColor: "#0369a1", windmillPos: [-15, 0, -5],
+        isNight: false, cactus: false,
+        castleBase: "#0c4a6e", castleRoof: "#7dd3fc", castleAccent: "#ffffff",
+        humanBody: "#1e40af", humanHead: "#dbeafe", humanAccent: "#0c4a6e"
+      },
+      [ThemeMode.VOLCANO]: {
+        sky: "#7f1d1d", ground: "#451a03", grid: "#7c2d12",
+        ambientIntensity: 0.7, lightColor: "#fb923c",
+        sunColor: "#ef4444", sunPosition: [0, 8, -40],
+        fogColor: "#450a0a", fogNear: 10, fogFar: 60,
+        treeColor: "#1c1917", hillColor: "#7c2d12",
+        windmillColor: "#1c1917", windmillPos: [15, 0, -5],
+        isNight: true, cactus: false,
+        castleBase: "#1c1917", castleRoof: "#dc2626", castleAccent: "#fb923c",
+        humanBody: "#450a0a", humanHead: "#fb923c", humanAccent: "#000000"
       }
     };
 
-    // --- UTILS ---
+    // ============ UTILS ============
     const rotateRight = (dir) => {
       switch (dir) {
         case Direction.UP: return Direction.RIGHT;
@@ -137,7 +170,6 @@
         default: return dir;
       }
     };
-
     const rotateLeft = (dir) => {
       switch (dir) {
         case Direction.UP: return Direction.LEFT;
@@ -147,23 +179,30 @@
         default: return dir;
       }
     };
-
     const getRandomCoordinate = () => Math.floor(Math.random() * (GRID_SIZE * 2 + 1)) - GRID_SIZE;
-
-    const getRandomPosition = (snakeSegments) => {
-      let pos;
-      let coll;
+    
+    const getRandomPosition = (occupied) => {
+      let pos, attempts = 0;
       do {
         pos = { x: getRandomCoordinate(), z: getRandomCoordinate() };
-        coll = snakeSegments.some((s) => s.x === pos.x && s.z === pos.z);
-      } while (coll);
+        attempts++;
+      } while (occupied.some((s) => s.x === pos.x && s.z === pos.z) && attempts < 200);
       return pos;
     };
+    
+    const getFarRandomPosition = (occupied, minDist = 3) => {
+      let pos, attempts = 0;
+      while (attempts < 200) {
+        pos = { x: getRandomCoordinate(), z: getRandomCoordinate() };
+        attempts++;
+        const tooClose = occupied.some(s => Math.abs(s.x - pos.x) + Math.abs(s.z - pos.z) < minDist);
+        if (!tooClose && !occupied.some(s => s.x === pos.x && s.z === pos.z)) return pos;
+      }
+      return getRandomPosition(occupied);
+    };
 
-    // --- COMPONENTS ---
-
-    // 1. Snake Component
-    const Snake = ({ segments, direction }) => {
+    // ============ SNAKE COMPONENT ============
+    const Snake = ({ segments, direction, skin, invincible }) => {
       const dirToYRot = useMemo(() => ({
         [Direction.UP]: 0,
         [Direction.RIGHT]: -Math.PI / 2,
@@ -174,48 +213,50 @@
       return React.createElement('group', null,
         segments.map((pos, index) => {
           const isHead = index === 0;
+          const scale = isHead ? 1.0 : Math.max(0.7, 1 - index * 0.015);
           return React.createElement('group', {
             key: `${index}-${pos.x}-${pos.z}`,
             position: [pos.x, 0, pos.z],
-            rotation: isHead ? [0, dirToYRot[direction] || 0, 0] : undefined
+            rotation: isHead ? [0, dirToYRot[direction] || 0, 0] : undefined,
+            scale: [scale, scale, scale]
           },
             React.createElement(RoundedBox, {
-              args: [0.9, 0.9, 0.9],
-              radius: 0.15,
-              smoothness: 4,
-              castShadow: true,
-              receiveShadow: true
+              args: [0.9, 0.9, 0.9], radius: 0.15, smoothness: 4,
+              castShadow: true, receiveShadow: true
             },
               React.createElement('meshStandardMaterial', {
-                color: isHead ? COLORS.SNAKE_HEAD : COLORS.SNAKE_BODY,
-                roughness: 0.3,
-                metalness: 0.1
+                color: isHead ? skin.head : skin.body,
+                roughness: 0.3, metalness: 0.15,
+                emissive: isHead ? skin.head : "#000000",
+                emissiveIntensity: isHead ? 0.15 : 0,
+                transparent: invincible,
+                opacity: invincible ? 0.5 : 1
               })
             ),
-            !isHead && React.createElement('mesh', { position: [0, 0.5, 0] },
-              React.createElement('coneGeometry', { args: [0.15, 0.4, 4] }),
-              React.createElement('meshStandardMaterial', { color: COLORS.SNAKE_HEAD })
+            !isHead && index % 2 === 1 && React.createElement('mesh', { position: [0, 0.55, 0] },
+              React.createElement('coneGeometry', { args: [0.13, 0.3, 4] }),
+              React.createElement('meshStandardMaterial', { color: skin.accent })
             ),
             isHead && React.createElement(React.Fragment, null,
-              React.createElement('mesh', { position: [0.25, 0.2, -0.35] },
-                React.createElement('sphereGeometry', { args: [0.1, 16, 16] }),
-                React.createElement('meshStandardMaterial', { color: "#ff0000", emissive: "#550000" })
+              React.createElement('mesh', { position: [0.22, 0.18, -0.4] },
+                React.createElement('sphereGeometry', { args: [0.13, 16, 16] }),
+                React.createElement('meshStandardMaterial', { color: "#ffffff" })
               ),
-              React.createElement('mesh', { position: [0.25, 0.2, -0.42] },
-                React.createElement('sphereGeometry', { args: [0.05, 16, 16] }),
-                React.createElement('meshStandardMaterial', { color: "black" })
+              React.createElement('mesh', { position: [0.22, 0.18, -0.5] },
+                React.createElement('sphereGeometry', { args: [0.07, 16, 16] }),
+                React.createElement('meshStandardMaterial', { color: skin.eye })
               ),
-              React.createElement('mesh', { position: [-0.25, 0.2, -0.35] },
-                React.createElement('sphereGeometry', { args: [0.1, 16, 16] }),
-                React.createElement('meshStandardMaterial', { color: "#ff0000", emissive: "#550000" })
+              React.createElement('mesh', { position: [-0.22, 0.18, -0.4] },
+                React.createElement('sphereGeometry', { args: [0.13, 16, 16] }),
+                React.createElement('meshStandardMaterial', { color: "#ffffff" })
               ),
-              React.createElement('mesh', { position: [-0.25, 0.2, -0.42] },
-                React.createElement('sphereGeometry', { args: [0.05, 16, 16] }),
-                React.createElement('meshStandardMaterial', { color: "black" })
+              React.createElement('mesh', { position: [-0.22, 0.18, -0.5] },
+                React.createElement('sphereGeometry', { args: [0.07, 16, 16] }),
+                React.createElement('meshStandardMaterial', { color: skin.eye })
               ),
-              React.createElement('mesh', { position: [0, 0.3, -0.2], rotation: [Math.PI / 4, 0, 0] },
-                React.createElement('coneGeometry', { args: [0.1, 0.3, 4] }),
-                React.createElement('meshStandardMaterial', { color: COLORS.SNAKE_BODY })
+              React.createElement('mesh', { position: [0, 0.05, -0.55], rotation: [Math.PI / 2, 0, 0] },
+                React.createElement('coneGeometry', { args: [0.05, 0.3, 4] }),
+                React.createElement('meshStandardMaterial', { color: "#ff0033", emissive: "#990022", emissiveIntensity: 0.5 })
               )
             )
           );
@@ -223,8 +264,8 @@
       );
     };
 
-    // 2. Castle (Food) Component
-    const Castle = ({ position }) => {
+    // ============ CASTLE COMPONENT ============
+    const Castle = ({ position, theme }) => {
       const ref = useRef(null);
       useFrame((state) => {
         if (ref.current) {
@@ -232,44 +273,110 @@
           ref.current.rotation.y += 0.01;
         }
       });
-
       return React.createElement('group', { ref: ref, position: [position.x, 0.5, position.z] },
         React.createElement('mesh', { position: [0, 0, 0], castShadow: true, receiveShadow: true },
-          React.createElement('boxGeometry', { args: [0.6, 0.6, 0.6] }),
-          React.createElement('meshStandardMaterial', { color: COLORS.CASTLE_BASE })
+          React.createElement('boxGeometry', { args: [0.7, 0.7, 0.7] }),
+          React.createElement('meshStandardMaterial', { color: theme.castleBase })
         ),
-        [-0.35, 0.35].map((x) => 
-          [-0.35, 0.35].map((z) => 
+        [-0.4, 0.4].map((x) =>
+          [-0.4, 0.4].map((z) =>
             React.createElement('group', { key: `${x}-${z}`, position: [x, 0.2, z] },
               React.createElement('mesh', { castShadow: true },
-                React.createElement('cylinderGeometry', { args: [0.15, 0.15, 0.8, 8] }),
-                React.createElement('meshStandardMaterial', { color: COLORS.CASTLE_BASE })
+                React.createElement('cylinderGeometry', { args: [0.17, 0.17, 0.9, 8] }),
+                React.createElement('meshStandardMaterial', { color: theme.castleBase })
               ),
-              React.createElement('mesh', { position: [0, 0.5, 0] },
-                React.createElement('coneGeometry', { args: [0.2, 0.4, 8] }),
-                React.createElement('meshStandardMaterial', { color: COLORS.CASTLE_ROOF })
+              React.createElement('mesh', { position: [0, 0.55, 0] },
+                React.createElement('coneGeometry', { args: [0.22, 0.45, 8] }),
+                React.createElement('meshStandardMaterial', { color: theme.castleRoof })
               )
             )
           )
         ),
-        React.createElement('mesh', { position: [0, 0.8, 0] },
-          React.createElement('boxGeometry', { args: [0.05, 0.6, 0.05] }),
+        React.createElement('mesh', { position: [0, 0.85, 0] },
+          React.createElement('boxGeometry', { args: [0.05, 0.7, 0.05] }),
           React.createElement('meshStandardMaterial', { color: "#fff" })
         ),
-        React.createElement('mesh', { position: [0.15, 1, 0] },
-          React.createElement('planeGeometry', { args: [0.3, 0.2] }),
-          React.createElement('meshStandardMaterial', { color: COLORS.CASTLE_ROOF, side: 2 })
+        React.createElement('mesh', { position: [0.2, 1.1, 0] },
+          React.createElement('planeGeometry', { args: [0.35, 0.25] }),
+          React.createElement('meshStandardMaterial', { color: theme.castleRoof, side: 2 })
+        ),
+        React.createElement('pointLight', { position: [0, 1, 0], intensity: 0.5, color: theme.castleAccent, distance: 4 }),
+        React.createElement('mesh', { position: [0, 1.3, 0] },
+          React.createElement('sphereGeometry', { args: [0.09, 16, 16] }),
+          React.createElement('meshStandardMaterial', { color: theme.castleAccent, emissive: theme.castleAccent, emissiveIntensity: 1 })
         )
       );
     };
 
-    // 3. Environment Components
+    // ============ HUMAN ENEMY COMPONENT ============
+    const Human = ({ position, theme }) => {
+      const ref = useRef(null);
+      const swordRef = useRef(null);
+      useFrame((state) => {
+        if (ref.current) {
+          const t = state.clock.getElapsedTime();
+          ref.current.position.y = Math.abs(Math.sin(t * 5 + position.x * 1.7)) * 0.12;
+          ref.current.rotation.y = Math.sin(t * 0.8 + position.z) * 0.5;
+        }
+        if (swordRef.current) {
+          const t = state.clock.getElapsedTime();
+          swordRef.current.rotation.x = Math.PI / 6 + Math.sin(t * 4) * 0.3;
+        }
+      });
+      return React.createElement('group', { ref: ref, position: [position.x, 0, position.z] },
+        React.createElement('mesh', { position: [0, 0.45, 0], castShadow: true },
+          React.createElement('boxGeometry', { args: [0.35, 0.55, 0.25] }),
+          React.createElement('meshStandardMaterial', { color: theme.humanBody })
+        ),
+        React.createElement('mesh', { position: [0, 0.9, 0], castShadow: true },
+          React.createElement('sphereGeometry', { args: [0.16, 12, 12] }),
+          React.createElement('meshStandardMaterial', { color: theme.humanHead })
+        ),
+        React.createElement('mesh', { position: [0, 1, 0] },
+          React.createElement('sphereGeometry', { args: [0.18, 12, 12, 0, Math.PI * 2, 0, Math.PI / 2] }),
+          React.createElement('meshStandardMaterial', { color: theme.castleBase, metalness: 0.6, roughness: 0.3 })
+        ),
+        React.createElement('mesh', { position: [0, 1.18, 0] },
+          React.createElement('coneGeometry', { args: [0.05, 0.15, 6] }),
+          React.createElement('meshStandardMaterial', { color: theme.humanAccent, metalness: 0.5 })
+        ),
+        React.createElement('mesh', { position: [0.25, 0.5, 0], castShadow: true },
+          React.createElement('boxGeometry', { args: [0.1, 0.4, 0.12] }),
+          React.createElement('meshStandardMaterial', { color: theme.humanBody })
+        ),
+        React.createElement('mesh', { position: [-0.25, 0.5, 0], castShadow: true },
+          React.createElement('boxGeometry', { args: [0.1, 0.4, 0.12] }),
+          React.createElement('meshStandardMaterial', { color: theme.humanBody })
+        ),
+        React.createElement('mesh', { position: [0.1, 0.12, 0], castShadow: true },
+          React.createElement('boxGeometry', { args: [0.12, 0.25, 0.12] }),
+          React.createElement('meshStandardMaterial', { color: "#1f2937" })
+        ),
+        React.createElement('mesh', { position: [-0.1, 0.12, 0], castShadow: true },
+          React.createElement('boxGeometry', { args: [0.12, 0.25, 0.12] }),
+          React.createElement('meshStandardMaterial', { color: "#1f2937" })
+        ),
+        React.createElement('group', { ref: swordRef, position: [0.35, 0.65, 0.1] },
+          React.createElement('mesh', { castShadow: true },
+            React.createElement('boxGeometry', { args: [0.05, 0.5, 0.05] }),
+            React.createElement('meshStandardMaterial', { color: "#e5e7eb", metalness: 0.8, roughness: 0.2 })
+          ),
+          React.createElement('mesh', { position: [0, -0.3, 0] },
+            React.createElement('boxGeometry', { args: [0.15, 0.08, 0.08] }),
+            React.createElement('meshStandardMaterial', { color: "#78350f" })
+          )
+        ),
+        React.createElement('mesh', { position: [-0.3, 0.5, 0.05], rotation: [0, Math.PI / 2, 0] },
+          React.createElement('cylinderGeometry', { args: [0.18, 0.18, 0.06, 8] }),
+          React.createElement('meshStandardMaterial', { color: theme.castleBase, metalness: 0.5, roughness: 0.4 })
+        )
+      );
+    };
+
+    // ============ ENVIRONMENT COMPONENTS ============
     const Windmill = ({ position, color }) => {
       const rotorRef = useRef(null);
-      useFrame((_, delta) => {
-        if (rotorRef.current) rotorRef.current.rotation.z -= delta * 2;
-      });
-
+      useFrame((_, delta) => { if (rotorRef.current) rotorRef.current.rotation.z -= delta * 2; });
       return React.createElement('group', { position: position },
         React.createElement('mesh', { position: [0, 1.5, 0], castShadow: true },
           React.createElement('cylinderGeometry', { args: [0.8, 1.2, 3, 6] }),
@@ -284,7 +391,7 @@
             React.createElement('boxGeometry', { args: [0.3, 0.3, 0.2] }),
             React.createElement('meshStandardMaterial', { color: "#222" })
           ),
-          [0, 1, 2, 3].map(i => 
+          [0, 1, 2, 3].map(i =>
             React.createElement('group', { key: i, rotation: [0, 0, (i * Math.PI) / 2] },
               React.createElement('mesh', { position: [0, 1.2, 0] },
                 React.createElement('boxGeometry', { args: [0.2, 2.4, 0.05] }),
@@ -313,18 +420,40 @@
       );
     };
 
+    const Cactus = ({ position, color }) => {
+      return React.createElement('group', { position: position },
+        React.createElement('mesh', { position: [0, 0.75, 0], castShadow: true },
+          React.createElement('boxGeometry', { args: [0.3, 1.5, 0.3] }),
+          React.createElement('meshStandardMaterial', { color: color })
+        ),
+        React.createElement('mesh', { position: [0.3, 1, 0], castShadow: true },
+          React.createElement('boxGeometry', { args: [0.5, 0.3, 0.25] }),
+          React.createElement('meshStandardMaterial', { color: color })
+        ),
+        React.createElement('mesh', { position: [0.55, 1.2, 0], castShadow: true },
+          React.createElement('boxGeometry', { args: [0.2, 0.5, 0.25] }),
+          React.createElement('meshStandardMaterial', { color: color })
+        ),
+        React.createElement('mesh', { position: [-0.3, 0.6, 0], castShadow: true },
+          React.createElement('boxGeometry', { args: [0.5, 0.3, 0.25] }),
+          React.createElement('meshStandardMaterial', { color: color })
+        ),
+        React.createElement('mesh', { position: [-0.55, 0.8, 0], castShadow: true },
+          React.createElement('boxGeometry', { args: [0.2, 0.5, 0.25] }),
+          React.createElement('meshStandardMaterial', { color: color })
+        )
+      );
+    };
+
     const Hills = ({ color }) => {
       const hills = useMemo(() => {
         const items = [];
-        const count = 20;
-        const radius = 25;
-        for (let i = 0; i < count; i++) {
-          const angle = (i / count) * Math.PI * 2;
-          const dist = radius + Math.random() * 5;
+        for (let i = 0; i < 20; i++) {
+          const angle = (i / 20) * Math.PI * 2;
+          const dist = 25 + Math.random() * 5;
           const x = Math.cos(angle) * dist;
           const z = Math.sin(angle) * dist;
           const scale = [4 + Math.random() * 4, 2 + Math.random() * 2, 4 + Math.random() * 4];
-          
           items.push(
             React.createElement('mesh', { key: i, position: [x, -1, z], scale: scale },
               React.createElement('sphereGeometry', { args: [1, 16, 16] }),
@@ -340,12 +469,10 @@
     const EnvironmentScenery = ({ mode }) => {
       const theme = THEMES[mode];
       const isNight = theme.isNight;
-
       const trees = useMemo(() => {
         const items = [];
-        const safeZone = GRID_SIZE + 3; // Ensure trees are well outside the polygon grid
+        const safeZone = GRID_SIZE + 3;
         const range = 35;
-        
         for (let i = 0; i < 40; i++) {
           const r = safeZone + Math.random() * (range - safeZone);
           const theta = Math.random() * Math.PI * 2;
@@ -354,64 +481,50 @@
           const scale = 0.8 + Math.random() * 0.5;
           items.push(
             React.createElement('group', { key: i, scale: [scale, scale, scale] },
-              React.createElement(Tree, { position: [x, 0, z], color: theme.treeColor })
+              theme.cactus
+                ? React.createElement(Cactus, { position: [x, 0, z], color: theme.treeColor })
+                : React.createElement(Tree, { position: [x, 0, z], color: theme.treeColor })
             )
           );
         }
         return items;
-      }, [theme.treeColor]);
+      }, [theme.treeColor, theme.cactus]);
 
       return React.createElement(React.Fragment, null,
         React.createElement('color', { attach: "background", args: [theme.sky] }),
         React.createElement('fog', { attach: "fog", args: [theme.fogColor, theme.fogNear, theme.fogFar] }),
-        
-        // Ground
         React.createElement('mesh', { rotation: [-Math.PI / 2, 0, 0], position: [0, -0.55, 0], receiveShadow: true },
           React.createElement('circleGeometry', { args: [80, 32] }),
           React.createElement('meshStandardMaterial', { color: theme.ground })
         ),
-        
-        // Grid (Polygon) Area
         React.createElement('mesh', { rotation: [-Math.PI / 2, 0, 0], position: [0, -0.5, 0], receiveShadow: true },
           React.createElement('planeGeometry', { args: [(GRID_SIZE * 2 + 1) * CELL_SIZE, (GRID_SIZE * 2 + 1) * CELL_SIZE] }),
           React.createElement('meshStandardMaterial', { color: theme.grid })
         ),
-        React.createElement('gridHelper', { 
-          args: [(GRID_SIZE * 2 + 1) * CELL_SIZE, GRID_SIZE * 2 + 1, parseInt(COLORS.GRID_LINES.replace('#', '0x')), parseInt(COLORS.GRID_LINES.replace('#', '0x'))],
+        React.createElement('gridHelper', {
+          args: [(GRID_SIZE * 2 + 1) * CELL_SIZE, GRID_SIZE * 2 + 1, GRID_COLOR, GRID_COLOR],
           position: [0, -0.49, 0]
         }),
-
-        // Hills surrounding the polygon
         React.createElement(Hills, { color: theme.hillColor }),
-
-        // Large Celestial Body (Sun/Moon) - Size increased significantly to match image
         React.createElement('group', { position: theme.sunPosition },
           React.createElement('mesh', null,
-            React.createElement('sphereGeometry', { args: [12, 32, 32] }), 
+            React.createElement('sphereGeometry', { args: [12, 32, 32] }),
             React.createElement('meshBasicMaterial', { color: theme.sunColor })
           ),
           !isNight && React.createElement('pointLight', { intensity: 1, distance: 200, color: theme.sunColor })
         ),
-
         isNight && React.createElement(Stars, { radius: 80, depth: 50, count: 3000, factor: 4, saturation: 0, fade: true, speed: 0.5 }),
-
-        // Decorative Trees
         trees,
-
-        // Windmill
-        React.createElement('group', { 
-          position: theme.windmillPos, 
-          rotation: [0, isNight ? Math.PI / 4 : -Math.PI / 4, 0] 
-        },
+        React.createElement('group', { position: theme.windmillPos, rotation: [0, isNight ? Math.PI / 4 : -Math.PI / 4, 0] },
           React.createElement(Windmill, { position: [0, 0, 0], color: theme.windmillColor })
         )
       );
     };
 
-    // 4. Game Scene
-    const GameScene = ({ snake, food, direction, themeMode }) => {
+    // ============ GAME SCENE ============
+    const GameScene = ({ snake, food, direction, themeMode, skin, humans, invincible }) => {
       const theme = THEMES[themeMode];
-
+      const isDarkTheme = themeMode === ThemeMode.NIGHT || themeMode === ThemeMode.VOLCANO;
       return React.createElement(Canvas, {
         shadows: true,
         camera: { position: [8, 12, 8], fov: 45 },
@@ -421,31 +534,41 @@
         React.createElement('ambientLight', { intensity: theme.ambientIntensity, color: theme.lightColor }),
         React.createElement('directionalLight', {
           position: [10, 20, 5],
-          intensity: themeMode === ThemeMode.DAY ? 1.5 : 0.5,
+          intensity: isDarkTheme ? 0.5 : 1.5,
           castShadow: true,
           "shadow-mapSize": [2048, 2048],
-          "shadow-camera-left": -20,
-          "shadow-camera-right": 20,
-          "shadow-camera-top": 20,
-          "shadow-camera-bottom": -20,
+          "shadow-camera-left": -20, "shadow-camera-right": 20,
+          "shadow-camera-top": 20, "shadow-camera-bottom": -20,
           color: theme.lightColor
         }),
-        themeMode === ThemeMode.NIGHT && React.createElement('pointLight', { position: [-10, 5, -10], intensity: 0.5, color: "#8b5cf6" }),
-        
+        isDarkTheme && React.createElement('pointLight', { position: [-10, 5, -10], intensity: 0.5, color: themeMode === ThemeMode.VOLCANO ? "#ef4444" : "#8b5cf6" }),
         React.createElement(EnvironmentScenery, { mode: themeMode }),
-        React.createElement(Snake, { segments: snake, direction: direction }),
-        React.createElement(Castle, { position: food }),
-        
+        React.createElement(Snake, { segments: snake, direction: direction, skin: skin, invincible: invincible }),
+        React.createElement(Castle, { position: food, theme: theme }),
+        humans.map((h, i) => React.createElement(Human, { key: `human-${i}`, position: h, theme: theme })),
         React.createElement(OrbitControls, {
-          enableZoom: false,
-          enablePan: false,
-          maxPolarAngle: Math.PI / 2.5,
-          minPolarAngle: Math.PI / 6
+          enableZoom: false, enablePan: false,
+          maxPolarAngle: Math.PI / 2.5, minPolarAngle: Math.PI / 6
         })
       );
     };
 
-    // --- MAIN APP ---
+    // ============ SKIN PREVIEW (CSS-based) ============
+    const SkinPreview = ({ skin, size = 40 }) => {
+      return React.createElement('div', { className: "flex items-end gap-0.5", style: { height: size } },
+        React.createElement('div', { style: { width: size * 0.6, height: size * 0.6, background: skin.head, borderRadius: '30% 30% 20% 20%', boxShadow: 'inset 0 0 5px rgba(0,0,0,0.3)', position: 'relative' } },
+          React.createElement('div', { style: { position: 'absolute', top: '20%', left: '20%', width: '18%', height: '18%', background: '#fff', borderRadius: '50%' } }),
+          React.createElement('div', { style: { position: 'absolute', top: '25%', left: '25%', width: '8%', height: '8%', background: skin.eye, borderRadius: '50%' } }),
+          React.createElement('div', { style: { position: 'absolute', top: '20%', right: '20%', width: '18%', height: '18%', background: '#fff', borderRadius: '50%' } }),
+          React.createElement('div', { style: { position: 'absolute', top: '25%', right: '25%', width: '8%', height: '8%', background: skin.eye, borderRadius: '50%' } })
+        ),
+        React.createElement('div', { style: { width: size * 0.4, height: size * 0.4, background: skin.body, borderRadius: '20%' } }),
+        React.createElement('div', { style: { width: size * 0.35, height: size * 0.35, background: skin.body, borderRadius: '20%' } }),
+        React.createElement('div', { style: { width: size * 0.3, height: size * 0.3, background: skin.body, borderRadius: '20%' } })
+      );
+    };
+
+    // ============ MAIN APP ============
     const INITIAL_SNAKE = [{x:0, z:0}, {x:0, z:1}, {x:0, z:2}];
     const INITIAL_DIRECTION = Direction.UP;
     const INITIAL_FOOD = {x:0, z:-4};
@@ -454,66 +577,116 @@
       const [gameState, setGameState] = useState(GameState.MENU);
       const [score, setScore] = useState(0);
       const [highScore, setHighScore] = useState(0);
-      const [themeMode, setThemeMode] = useState(ThemeMode.DAY);
-      
+      const [currentLevel, setCurrentLevel] = useState(0);
+      const [unlockedLevels, setUnlockedLevels] = useState(1);
+      const [selectedSkin, setSelectedSkin] = useState(SKINS[0]);
+      const [health, setHealth] = useState(CONFIG.initialHealth);
+      const [damageFlash, setDamageFlash] = useState(false);
+      const [invincible, setInvincible] = useState(false);
+      const [showHint, setShowHint] = useState(true);
+
       const [snake, setSnake] = useState([...INITIAL_SNAKE]);
       const [food, setFood] = useState({...INITIAL_FOOD});
+      const [humans, setHumans] = useState([]);
       const [directionState, setDirectionState] = useState(INITIAL_DIRECTION);
 
+      // Refs for game loop
       const snakeRef = useRef([...INITIAL_SNAKE]);
       const directionRef = useRef(INITIAL_DIRECTION);
       const inputQueueRef = useRef([]);
       const foodRef = useRef({...INITIAL_FOOD});
+      const humansRef = useRef([]);
       const speedRef = useRef(CONFIG.initialSpeed);
       const lastUpdateRef = useRef(0);
+      const lastHumanMoveRef = useRef(0);
       const requestRef = useRef(null);
+      const healthRef = useRef(CONFIG.initialHealth);
+      const invincibilityEndRef = useRef(0);
+      const scoreRef = useRef(0);
+      const currentLevelRef = useRef(0);
+      const gameStateRef = useRef(GameState.MENU);
+
+      const level = LEVELS[currentLevel];
+      const themeMode = level.theme;
 
       const eatSound = useRef(null);
       const dieSound = useRef(null);
+      const hurtSound = useRef(null);
+
+      useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
 
       useEffect(() => {
-        const loadHigh = localStorage.getItem("ch_high");
-        if (loadHigh) setHighScore(parseInt(loadHigh, 10));
-
+        try {
+          const loadHigh = localStorage.getItem("ch_high");
+          if (loadHigh) setHighScore(parseInt(loadHigh, 10));
+          const loadUnlocked = localStorage.getItem("ch_unlocked");
+          if (loadUnlocked) setUnlockedLevels(parseInt(loadUnlocked, 10));
+          const loadSkin = localStorage.getItem("ch_skin");
+          if (loadSkin) {
+            const s = SKINS.find(s => s.id === loadSkin);
+            if (s) setSelectedSkin(s);
+          }
+        } catch (e) {}
+        
         eatSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3');
         dieSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3');
+        hurtSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3');
         if (eatSound.current) eatSound.current.volume = 0.25;
         if (dieSound.current) dieSound.current.volume = 0.35;
+        if (hurtSound.current) hurtSound.current.volume = 0.3;
       }, []);
+
+      useEffect(() => {
+        try { localStorage.setItem("ch_skin", selectedSkin.id); } catch (e) {}
+      }, [selectedSkin]);
 
       const playSound = (type) => {
         try {
-          if (type === 'eat' && eatSound.current) {
-            eatSound.current.currentTime = 0;
-            eatSound.current.play().catch(() => {});
-          }
-          if (type === 'die' && dieSound.current) {
-            dieSound.current.currentTime = 0;
-            dieSound.current.play().catch(() => {});
-          }
+          if (type === 'eat' && eatSound.current) { eatSound.current.currentTime = 0; eatSound.current.play().catch(() => {}); }
+          if (type === 'die' && dieSound.current) { dieSound.current.currentTime = 0; dieSound.current.play().catch(() => {}); }
+          if (type === 'hurt' && hurtSound.current) { hurtSound.current.currentTime = 0; hurtSound.current.play().catch(() => {}); }
         } catch (e) {}
       };
 
-      const resetGame = useCallback(() => {
+      const resetGame = useCallback((levelIdx) => {
+        const lvl = LEVELS[levelIdx];
+        currentLevelRef.current = levelIdx;
+        scoreRef.current = 0;
         setScore(0);
+        setHealth(CONFIG.initialHealth);
+        healthRef.current = CONFIG.initialHealth;
+        invincibilityEndRef.current = 0;
+        setInvincible(false);
         setGameState(GameState.PLAYING);
+        gameStateRef.current = GameState.PLAYING;
+        setShowHint(true);
+        setTimeout(() => setShowHint(false), 4000);
         snakeRef.current = [...INITIAL_SNAKE];
         directionRef.current = INITIAL_DIRECTION;
         inputQueueRef.current = [];
-        foodRef.current = getRandomPosition(snakeRef.current);
+        foodRef.current = getFarRandomPosition(snakeRef.current, 4);
         speedRef.current = CONFIG.initialSpeed;
-        
+        const newHumans = [];
+        const occupied = [...snakeRef.current, foodRef.current];
+        for (let i = 0; i < lvl.humans; i++) {
+          const pos = getFarRandomPosition(occupied, 3);
+          newHumans.push(pos);
+          occupied.push(pos);
+        }
+        humansRef.current = newHumans;
         setSnake([...snakeRef.current]);
         setFood({...foodRef.current});
+        setHumans([...humansRef.current]);
         setDirectionState(INITIAL_DIRECTION);
+        lastUpdateRef.current = performance.now();
+        lastHumanMoveRef.current = performance.now();
       }, []);
 
       const handleKeyDown = useCallback((e) => {
         if (e.repeat) return;
-        const lastScheduled = inputQueueRef.current.length > 0 
-          ? inputQueueRef.current[inputQueueRef.current.length - 1] 
+        const lastScheduled = inputQueueRef.current.length > 0
+          ? inputQueueRef.current[inputQueueRef.current.length - 1]
           : directionRef.current;
-
         if (e.key === 'a' || e.key === 'A') {
           const newDir = rotateLeft(lastScheduled);
           if (inputQueueRef.current.length < 3) inputQueueRef.current.push(newDir);
@@ -524,24 +697,18 @@
           if (inputQueueRef.current.length < 3) inputQueueRef.current.push(newDir);
           return;
         }
-
         let newDir = null;
         if (e.key === "ArrowUp" || e.key === "w" || e.key === "W") newDir = Direction.UP;
         if (e.key === "ArrowDown" || e.key === "s" || e.key === "S") newDir = Direction.DOWN;
         if (e.key === "ArrowLeft") newDir = Direction.LEFT;
         if (e.key === "ArrowRight") newDir = Direction.RIGHT;
-
         if (!newDir) return;
-
-        const isOpposite = 
+        const isOpposite =
           (newDir === Direction.UP && lastScheduled === Direction.DOWN) ||
           (newDir === Direction.DOWN && lastScheduled === Direction.UP) ||
           (newDir === Direction.LEFT && lastScheduled === Direction.RIGHT) ||
           (newDir === Direction.RIGHT && lastScheduled === Direction.LEFT);
-
-        if (!isOpposite && inputQueueRef.current.length < 3) {
-          inputQueueRef.current.push(newDir);
-        }
+        if (!isOpposite && inputQueueRef.current.length < 3) inputQueueRef.current.push(newDir);
       }, []);
 
       useEffect(() => {
@@ -550,17 +717,44 @@
       }, [handleKeyDown]);
 
       const gameLoop = useCallback((time) => {
-        if (gameState !== GameState.PLAYING) return;
+        if (gameStateRef.current !== GameState.PLAYING) return;
+
+        // Move humans periodically
+        if (time - lastHumanMoveRef.current > CONFIG.humanMoveInterval) {
+          const occupied = [...snakeRef.current, foodRef.current];
+          const movedHumans = [];
+          for (const h of humansRef.current) {
+            const moves = [[0,1],[0,-1],[1,0],[-1,0],[0,0]];
+            moves.sort(() => Math.random() - 0.5);
+            let placed = false;
+            for (const [dx, dz] of moves) {
+              let nx = Math.max(-GRID_SIZE, Math.min(GRID_SIZE, h.x + dx));
+              let nz = Math.max(-GRID_SIZE, Math.min(GRID_SIZE, h.z + dz));
+              if (!occupied.some(s => s.x === nx && s.z === nz) && !movedHumans.some(m => m.x === nx && m.z === nz)) {
+                movedHumans.push({ x: nx, z: nz });
+                occupied.push({ x: nx, z: nz });
+                placed = true;
+                break;
+              }
+            }
+            if (!placed) { movedHumans.push(h); occupied.push(h); }
+          }
+          humansRef.current = movedHumans;
+          setHumans([...movedHumans]);
+          lastHumanMoveRef.current = time;
+        }
+
+        // Decay invincibility
+        if (time > invincibilityEndRef.current && invincibilityEndRef.current > 0) {
+          invincibilityEndRef.current = 0;
+          setInvincible(false);
+        }
 
         if (time - lastUpdateRef.current > speedRef.current) {
           if (inputQueueRef.current.length > 0) {
             const nextDir = inputQueueRef.current.shift();
-            if (nextDir) {
-              directionRef.current = nextDir;
-              setDirectionState(nextDir);
-            }
+            if (nextDir) { directionRef.current = nextDir; setDirectionState(nextDir); }
           }
-
           const head = snakeRef.current[0];
           let newHead = { ...head };
           switch (directionRef.current) {
@@ -569,147 +763,330 @@
             case Direction.LEFT: newHead.x -= 1; break;
             case Direction.RIGHT: newHead.x += 1; break;
           }
-
+          // Boundary
           if (newHead.x < -GRID_SIZE || newHead.x > GRID_SIZE || newHead.z < -GRID_SIZE || newHead.z > GRID_SIZE) {
-            playSound('die');
-            setGameState(GameState.GAME_OVER);
-            if (requestRef.current) cancelAnimationFrame(requestRef.current);
-            return;
+            playSound('die'); setGameState(GameState.GAME_OVER); gameStateRef.current = GameState.GAME_OVER;
+            if (requestRef.current) cancelAnimationFrame(requestRef.current); return;
           }
-
           const willEat = newHead.x === foodRef.current.x && newHead.z === foodRef.current.z;
           const segmentsToCheck = willEat ? snakeRef.current : snakeRef.current.slice(0, -1);
           if (segmentsToCheck.some(s => s.x === newHead.x && s.z === newHead.z)) {
-            playSound('die');
-            setGameState(GameState.GAME_OVER);
-            if (requestRef.current) cancelAnimationFrame(requestRef.current);
-            return;
+            playSound('die'); setGameState(GameState.GAME_OVER); gameStateRef.current = GameState.GAME_OVER;
+            if (requestRef.current) cancelAnimationFrame(requestRef.current); return;
           }
-
+          // Human collision
+          const humanHitIndex = humansRef.current.findIndex(h => h.x === newHead.x && h.z === newHead.z);
+          if (humanHitIndex !== -1 && invincibilityEndRef.current === 0) {
+            playSound('hurt');
+            setDamageFlash(true);
+            setTimeout(() => setDamageFlash(false), 400);
+            humansRef.current.splice(humanHitIndex, 1);
+            setHumans([...humansRef.current]);
+            healthRef.current -= 1;
+            setHealth(healthRef.current);
+            invincibilityEndRef.current = time + CONFIG.invincibilityDuration;
+            setInvincible(true);
+            if (healthRef.current <= 0) {
+              playSound('die'); setGameState(GameState.GAME_OVER); gameStateRef.current = GameState.GAME_OVER;
+              if (requestRef.current) cancelAnimationFrame(requestRef.current); return;
+            }
+          }
           const newSnake = [newHead, ...snakeRef.current];
           if (!willEat) {
             newSnake.pop();
           } else {
             playSound('eat');
-            setScore(s => {
-              const ns = s + 1;
-              if (ns > highScore) {
-                setHighScore(ns);
-                localStorage.setItem("ch_high", String(ns));
-              }
-              return ns;
-            });
-            speedRef.current = Math.max(50, speedRef.current - CONFIG.speedIncrement);
-            foodRef.current = getRandomPosition(newSnake);
+            scoreRef.current += 1;
+            setScore(scoreRef.current);
+            if (scoreRef.current > highScore) {
+              setHighScore(scoreRef.current);
+              try { localStorage.setItem("ch_high", String(scoreRef.current)); } catch (e) {}
+            }
+            speedRef.current = Math.max(80, speedRef.current - CONFIG.speedIncrement);
+            foodRef.current = getFarRandomPosition([...newSnake, ...humansRef.current], 3);
             setFood({...foodRef.current});
+            // Level complete?
+            if (scoreRef.current >= LEVELS[currentLevelRef.current].target) {
+              const newUnlocked = Math.max(unlockedLevels, currentLevelRef.current + 2);
+              if (newUnlocked > unlockedLevels) {
+                setUnlockedLevels(newUnlocked);
+                try { localStorage.setItem("ch_unlocked", String(newUnlocked)); } catch (e) {}
+              }
+              setGameState(GameState.LEVEL_COMPLETE);
+              gameStateRef.current = GameState.LEVEL_COMPLETE;
+              if (requestRef.current) cancelAnimationFrame(requestRef.current);
+              return;
+            }
           }
-
           snakeRef.current = newSnake;
           setSnake([...newSnake]);
           lastUpdateRef.current = time;
         }
         requestRef.current = requestAnimationFrame(gameLoop);
-      }, [gameState, highScore]);
+      }, [highScore, unlockedLevels]);
 
       useEffect(() => {
         if (gameState === GameState.PLAYING) {
           lastUpdateRef.current = performance.now();
+          lastHumanMoveRef.current = performance.now();
           requestRef.current = requestAnimationFrame(gameLoop);
         }
-        return () => {
-          if (requestRef.current) cancelAnimationFrame(requestRef.current);
-        };
+        return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
       }, [gameState, gameLoop]);
 
-      const toggleTheme = () => {
-        setThemeMode(prev => prev === ThemeMode.DAY ? ThemeMode.NIGHT : ThemeMode.DAY);
+      const quitToMenu = () => {
+        if (requestRef.current) cancelAnimationFrame(requestRef.current);
+        gameStateRef.current = GameState.MENU;
+        setGameState(GameState.MENU);
       };
 
-      return React.createElement('div', { className: "relative w-full h-full overflow-hidden" },
+      const startLevel = (levelIdx) => {
+        setCurrentLevel(levelIdx);
+        resetGame(levelIdx);
+      };
+
+      const goNextLevel = () => {
+        const next = Math.min(currentLevel + 1, LEVELS.length - 1);
+        setCurrentLevel(next);
+        resetGame(next);
+      };
+
+      const showGameScene = gameState === GameState.PLAYING || gameState === GameState.GAME_OVER || gameState === GameState.LEVEL_COMPLETE;
+
+      // ====== HEARTS DISPLAY ======
+      const Hearts = () => React.createElement('div', { className: "flex gap-1" },
+        [...Array(CONFIG.initialHealth)].map((_, i) =>
+          React.createElement('span', { key: i, className: "text-xl md:text-2xl" }, i < health ? "❤️" : "🖤")
+        )
+      );
+
+      return React.createElement('div', { className: `relative w-full h-full overflow-hidden ${damageFlash ? 'shake' : ''}` },
         // 3D Layer
         React.createElement('div', { className: "absolute inset-0 z-0" },
-          React.createElement(GameScene, {
-            snake: snake,
-            food: food,
-            direction: directionState,
-            themeMode: themeMode
-          })
+          showGameScene
+            ? React.createElement(GameScene, {
+                snake, food, direction: directionState, themeMode, skin: selectedSkin, humans, invincible
+              })
+            : React.createElement(GameScene, {
+                snake: INITIAL_SNAKE, food: INITIAL_FOOD, direction: INITIAL_DIRECTION,
+                themeMode: ThemeMode.VALLEY, skin: selectedSkin, humans: [], invincible: false
+              })
         ),
-        
-        // UI Layer
-        React.createElement('div', { className: "absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-6 md:p-8" },
-          // Header
-          React.createElement('div', { className: "flex justify-between items-start" },
-            React.createElement('div', null,
-              React.createElement('h1', { className: "text-3xl md:text-4xl font-bold pixel-font text-emerald-400 drop-shadow-md" }, "CASTLE HUNTER"),
-              React.createElement('p', { className: "text-slate-300 mt-2 font-semibold drop-shadow" }, "VOXEL EDITION")
-            ),
-            React.createElement('div', { className: "flex gap-4 pointer-events-auto items-center" },
-              // THEME BUTTON (Added as requested near scores)
-              React.createElement('button', {
-                onClick: toggleTheme,
-                className: `p-3 rounded-xl border transition-colors shadow-lg flex items-center justify-center hover:scale-105 transform duration-200 ${
-                  themeMode === ThemeMode.DAY 
-                    ? 'bg-sky-400/80 border-sky-200 text-yellow-100' 
-                    : 'bg-indigo-900/80 border-indigo-700 text-indigo-200'
-                }`,
-                title: "Toggle Environment"
-              },
-                themeMode === ThemeMode.DAY ? '☀️' : '🌙'
-              ),
+        // Damage red overlay
+        damageFlash && React.createElement('div', { className: "absolute inset-0 z-5 damage-overlay bg-red-600 pointer-events-none" }),
 
-              React.createElement('div', { className: "bg-black/50 backdrop-blur-md p-3 md:p-4 rounded-xl border border-white/10 flex items-center gap-3" },
-                React.createElement('div', null,
-                  React.createElement('p', { className: "text-[10px] md:text-xs text-slate-400 uppercase tracking-wider" }, "Score"),
-                  React.createElement('p', { className: "text-xl md:text-2xl font-mono font-bold text-white" }, score)
+        // UI Layer
+        React.createElement('div', { className: "absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-4 md:p-6" },
+
+          // ====== HEADER (during play) ======
+          (gameState === GameState.PLAYING || gameState === GameState.GAME_OVER || gameState === GameState.LEVEL_COMPLETE) &&
+          React.createElement('div', { className: "flex justify-between items-start gap-2" },
+            React.createElement('div', null,
+              React.createElement('h1', { className: "text-xl md:text-3xl font-bold pixel-font text-emerald-400 drop-shadow-md" }, "CASTLE HUNTER"),
+              React.createElement('p', { className: "text-slate-300 text-xs md:text-sm mt-1 font-semibold drop-shadow" }, `${level.icon} ${level.name}`)
+            ),
+            React.createElement('div', { className: "flex gap-2 md:gap-3 pointer-events-auto items-center flex-wrap justify-end" },
+              // Health
+              React.createElement('div', { className: "bg-black/50 backdrop-blur-md px-3 py-2 rounded-xl border border-white/10" },
+                React.createElement(Hearts)
+              ),
+              // Score
+              React.createElement('div', { className: "bg-black/50 backdrop-blur-md p-2 md:p-3 rounded-xl border border-white/10" },
+                React.createElement('p', { className: "text-[9px] md:text-[10px] text-slate-400 uppercase tracking-wider" }, "Score"),
+                React.createElement('p', { className: "text-base md:text-xl font-mono font-bold text-white" }, `${score}/${level.target}`)
+              ),
+              // Best
+              React.createElement('div', { className: "bg-black/50 backdrop-blur-md p-2 md:p-3 rounded-xl border border-white/10" },
+                React.createElement('p', { className: "text-[9px] md:text-[10px] text-slate-400 uppercase tracking-wider" }, "Best"),
+                React.createElement('p', { className: "text-base md:text-xl font-mono font-bold text-white" }, highScore)
+              ),
+              // Quit button
+              gameState === GameState.PLAYING && React.createElement('button', {
+                onClick: quitToMenu,
+                className: "p-2 md:p-3 rounded-xl bg-red-900/60 border border-red-500/30 text-red-200 hover:bg-red-800/60 transition-colors text-sm font-bold",
+                title: "Quit to Menu"
+              }, "✕")
+            )
+          ),
+
+          // Progress bar during play
+          gameState === GameState.PLAYING && React.createElement('div', { className: "self-center w-64 md:w-96 mt-2" },
+            React.createElement('div', { className: "h-2 bg-black/50 rounded-full overflow-hidden border border-white/10" },
+              React.createElement('div', {
+                className: "h-full bg-gradient-to-r from-emerald-400 to-emerald-300 rounded-full transition-all duration-300",
+                style: { width: `${Math.min(100, (score / level.target) * 100)}%` }
+              })
+            )
+          ),
+
+          // Controls hint
+          gameState === GameState.PLAYING && showHint && React.createElement('div', { className: "self-center text-center mt-4" },
+            React.createElement('div', { className: "bg-black/40 backdrop-blur-sm px-5 py-2 rounded-full border border-white/5 text-xs md:text-sm text-slate-300" },
+              "Use ", React.createElement('span', { className: "text-white font-bold mx-1" }, "WASD"),
+              " or ", React.createElement('span', { className: "text-white font-bold mx-1" }, "Arrows"),
+              " to move · Avoid the ", React.createElement('span', { className: "text-red-300 font-bold" }, "hunters!")
+            )
+          ),
+
+          // ====== MENU SCREEN ======
+          gameState === GameState.MENU && React.createElement('div', { className: "flex items-center justify-center h-full pointer-events-auto" },
+            React.createElement('div', { className: "text-center float-in bg-black/50 p-8 md:p-12 rounded-3xl backdrop-blur-md border border-white/10 max-w-md" },
+              React.createElement('h1', { className: "text-3xl md:text-5xl pixel-font text-emerald-400 mb-3 drop-shadow-lg" }, "CASTLE"),
+              React.createElement('h1', { className: "text-3xl md:text-5xl pixel-font text-white mb-2 drop-shadow-lg" }, "HUNTER"),
+              React.createElement('p', { className: "text-slate-400 text-sm mb-6 font-inter" }, "VOXEL EDITION · 5 REALMS"),
+              // Current skin preview
+              React.createElement('div', { className: "flex items-center justify-center gap-3 mb-6 bg-black/30 rounded-xl p-3 border border-white/5" },
+                React.createElement(SkinPreview, { skin: selectedSkin, size: 36 }),
+                React.createElement('div', { className: "text-left" },
+                  React.createElement('p', { className: "text-[10px] text-slate-500 uppercase" }, "Current Skin"),
+                  React.createElement('p', { className: "text-white font-bold text-sm" }, selectedSkin.name)
                 )
               ),
-              React.createElement('div', { className: "bg-black/50 backdrop-blur-md p-3 md:p-4 rounded-xl border border-white/10 flex items-center gap-3" },
-                React.createElement('div', null,
-                  React.createElement('p', { className: "text-[10px] md:text-xs text-slate-400 uppercase tracking-wider" }, "Best"),
-                  React.createElement('p', { className: "text-xl md:text-2xl font-mono font-bold text-white" }, highScore)
-                )
+              React.createElement('div', { className: "flex flex-col gap-3" },
+                React.createElement('button', {
+                  onClick: () => setGameState(GameState.LEVEL_SELECT),
+                  className: "px-8 py-4 bg-emerald-500 hover:bg-emerald-400 transition-all rounded-lg font-bold text-lg shadow-[0_0_40px_-10px_rgba(16,185,129,0.5)] hover:shadow-[0_0_60px_-10px_rgba(16,185,129,0.7)] hover:-translate-y-0.5 text-white"
+                }, "▶ PLAY"),
+                React.createElement('button', {
+                  onClick: () => setGameState(GameState.SKIN_SELECT),
+                  className: "px-8 py-3 bg-white/10 hover:bg-white/20 transition-all rounded-lg font-bold text-base text-white border border-white/10"
+                }, "🎨 SKINS"),
+                React.createElement('p', { className: "text-slate-400 text-xs mt-2" }, `Best Score: ${highScore} · Realms Unlocked: ${unlockedLevels}/5`)
               )
             )
           ),
 
-          // Controls Hint
-          gameState === GameState.PLAYING && React.createElement('div', { className: "self-center text-center mb-12 animate-pulse" },
-            React.createElement('div', { className: "bg-black/30 backdrop-blur-sm px-6 py-3 rounded-full border border-white/5 text-sm text-slate-300" },
-              "Use ", React.createElement('span', { className: "text-white font-bold mx-1" }, "WASD"),
-              " or ", React.createElement('span', { className: "text-white font-bold mx-1" }, "Arrows"), " to move"
+          // ====== LEVEL SELECT SCREEN ======
+          gameState === GameState.LEVEL_SELECT && React.createElement('div', { className: "flex items-center justify-center h-full pointer-events-auto" },
+            React.createElement('div', { className: "float-in bg-black/60 p-6 md:p-8 rounded-3xl backdrop-blur-md border border-white/10 max-w-2xl w-full mx-4" },
+              React.createElement('h2', { className: "text-2xl md:text-3xl pixel-font text-white mb-2 text-center" }, "SELECT REALM"),
+              React.createElement('p', { className: "text-slate-400 text-sm mb-6 text-center" }, "Choose your hunting ground"),
+              React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-2 gap-3" },
+                LEVELS.map((lvl, i) => {
+                  const locked = i >= unlockedLevels;
+                  return React.createElement('button', {
+                    key: lvl.id,
+                    onClick: () => !locked && startLevel(i),
+                    disabled: locked,
+                    className: `p-4 rounded-xl border transition-all text-left ${
+                      locked
+                        ? 'bg-black/40 border-white/5 opacity-40 cursor-not-allowed'
+                        : 'bg-black/50 border-white/10 hover:border-emerald-400/50 hover:bg-black/70 hover:scale-[1.02] cursor-pointer'
+                    }`
+                  },
+                    React.createElement('div', { className: "flex items-center justify-between mb-2" },
+                      React.createElement('span', { className: "text-3xl" }, locked ? "🔒" : lvl.icon),
+                      React.createElement('span', { className: "text-xs font-mono text-slate-500" }, `LV ${lvl.id}`)
+                    ),
+                    React.createElement('p', { className: "text-white font-bold text-base" }, lvl.name),
+                    React.createElement('div', { className: "flex items-center gap-3 mt-2 text-xs text-slate-400" },
+                      React.createElement('span', null, `🏰 ${lvl.target} castles`),
+                      React.createElement('span', null, `⚔️ ${lvl.humans} hunter${lvl.humans > 1 ? 's' : ''}`)
+                    ),
+                    !locked && i === unlockedLevels - 1 && React.createElement('div', { className: "mt-2 inline-block px-2 py-0.5 bg-emerald-500/20 text-emerald-300 text-[10px] rounded-full font-bold" }, "NEW")
+                  );
+                })
+              ),
+              React.createElement('button', {
+                onClick: () => setGameState(GameState.MENU),
+                className: "mt-6 w-full py-2 text-slate-400 hover:text-white text-sm transition-colors"
+              }, "← Back to Menu")
             )
           ),
 
-          // Menus
-          React.createElement('div', { className: "flex items-center justify-center pointer-events-auto" },
-            gameState === GameState.MENU && React.createElement('div', { className: "text-center animate-in fade-in zoom-in duration-300 bg-black/40 p-8 rounded-2xl backdrop-blur-sm border border-white/10" },
-              React.createElement('h2', { className: "text-4xl md:text-6xl pixel-font text-white mb-8 drop-shadow-lg" }, "READY?"),
+          // ====== SKIN SELECT SCREEN ======
+          gameState === GameState.SKIN_SELECT && React.createElement('div', { className: "flex items-center justify-center h-full pointer-events-auto" },
+            React.createElement('div', { className: "float-in bg-black/60 p-6 md:p-8 rounded-3xl backdrop-blur-md border border-white/10 max-w-2xl w-full mx-4" },
+              React.createElement('h2', { className: "text-2xl md:text-3xl pixel-font text-white mb-2 text-center" }, "CHOOSE SKIN"),
+              React.createElement('p', { className: "text-slate-400 text-sm mb-6 text-center" }, "Select your serpent's appearance"),
+              React.createElement('div', { className: "grid grid-cols-2 md:grid-cols-3 gap-3" },
+                SKINS.map(skin =>
+                  React.createElement('button', {
+                    key: skin.id,
+                    onClick: () => setSelectedSkin(skin),
+                    className: `p-4 rounded-xl border transition-all ${
+                      selectedSkin.id === skin.id
+                        ? 'bg-emerald-500/20 border-2 border-emerald-400 scale-105'
+                        : 'bg-black/50 border border-white/10 hover:border-white/30 hover:bg-black/70'
+                    }`
+                  },
+                    React.createElement('div', { className: "flex justify-center mb-3" },
+                      React.createElement(SkinPreview, { skin: skin, size: 48 })
+                    ),
+                    React.createElement('p', { className: "text-white font-bold text-sm text-center" }, skin.name),
+                    React.createElement('p', { className: "text-slate-400 text-[10px] text-center mt-1" }, skin.desc),
+                    selectedSkin.id === skin.id && React.createElement('p', { className: "text-emerald-400 text-[10px] text-center mt-2 font-bold" }, "✓ SELECTED")
+                  )
+                )
+              ),
               React.createElement('button', {
-                onClick: resetGame,
-                className: "group relative px-8 py-4 bg-emerald-500 hover:bg-emerald-400 transition-all rounded-lg font-bold text-xl flex items-center justify-center gap-3 mx-auto shadow-[0_0_40px_-10px_rgba(16,185,129,0.5)] hover:shadow-[0_0_60px_-10px_rgba(16,185,129,0.7)] hover:-translate-y-1 text-white"
-              }, "START GAME"),
-              React.createElement('p', { className: "mt-6 text-slate-300 text-sm font-inter" }, "Hunt the castles. Grow the beast.")
-            ),
+                onClick: () => setGameState(GameState.MENU),
+                className: "mt-6 w-full py-2 text-slate-400 hover:text-white text-sm transition-colors"
+              }, "← Back to Menu")
+            )
+          ),
 
-            gameState === GameState.GAME_OVER && React.createElement('div', { className: "text-center animate-in slide-in-from-bottom-10 duration-300 bg-black/60 p-10 rounded-3xl backdrop-blur-md border border-red-500/30" },
-              React.createElement('div', { className: "text-6xl mb-6" }, "☠️"),
-              React.createElement('h2', { className: "text-4xl md:text-5xl pixel-font text-white mb-2" }, "GAME OVER"),
-              React.createElement('p', { className: "text-xl text-red-200 mb-8 font-inter" }, "Your reign has ended."),
-              React.createElement('div', { className: "flex flex-col gap-4" },
-                React.createElement('p', { className: "text-emerald-400 font-mono text-xl" }, `Score: ${score}`),
+          // ====== GAME OVER SCREEN ======
+          gameState === GameState.GAME_OVER && React.createElement('div', { className: "flex items-center justify-center h-full pointer-events-auto" },
+            React.createElement('div', { className: "float-in text-center bg-black/70 p-8 md:p-10 rounded-3xl backdrop-blur-md border border-red-500/30 max-w-sm" },
+              React.createElement('div', { className: "text-6xl mb-4" }, "☠️"),
+              React.createElement('h2', { className: "text-3xl md:text-4xl pixel-font text-white mb-2" }, "GAME OVER"),
+              React.createElement('p', { className: "text-red-200 mb-6 text-sm" }, health <= 0 ? "The hunters have slain you!" : "Your reign has ended."),
+              React.createElement('div', { className: "flex justify-center gap-6 mb-6" },
+                React.createElement('div', null,
+                  React.createElement('p', { className: "text-[10px] text-slate-400 uppercase" }, "Score"),
+                  React.createElement('p', { className: "text-2xl font-mono font-bold text-emerald-400" }, score)
+                ),
+                React.createElement('div', null,
+                  React.createElement('p', { className: "text-[10px] text-slate-400 uppercase" }, "Realm"),
+                  React.createElement('p', { className: "text-2xl font-mono font-bold text-white" }, level.id)
+                )
+              ),
+              React.createElement('div', { className: "flex flex-col gap-3" },
                 React.createElement('button', {
-                  onClick: resetGame,
+                  onClick: () => resetGame(currentLevel),
                   className: "px-8 py-3 bg-white text-red-900 hover:bg-gray-100 transition-colors rounded-lg font-bold text-lg shadow-lg"
-                }, "TRY AGAIN"),
+                }, "↻ TRY AGAIN"),
                 React.createElement('button', {
-                  onClick: () => setGameState(GameState.MENU),
-                  className: "text-sm text-slate-400 hover:text-white underline underline-offset-4"
+                  onClick: () => setGameState(GameState.LEVEL_SELECT),
+                  className: "px-8 py-2 bg-white/10 text-white hover:bg-white/20 transition-colors rounded-lg font-bold text-sm"
+                }, "Realm Select"),
+                React.createElement('button', {
+                  onClick: quitToMenu,
+                  className: "text-sm text-slate-400 hover:text-white underline underline-offset-4 mt-1"
                 }, "Back to Menu")
               )
             )
           ),
-          React.createElement('div', null) // Spacer
+
+          // ====== LEVEL COMPLETE SCREEN ======
+          gameState === GameState.LEVEL_COMPLETE && React.createElement('div', { className: "flex items-center justify-center h-full pointer-events-auto" },
+            React.createElement('div', { className: "float-in text-center bg-black/70 p-8 md:p-10 rounded-3xl backdrop-blur-md border border-emerald-400/40 max-w-sm" },
+              React.createElement('div', { className: "text-6xl mb-4" }, "🏆"),
+              React.createElement('h2', { className: "text-2xl md:text-3xl pixel-font text-emerald-400 mb-2" }, "REALM CLEARED!"),
+              React.createElement('p', { className: "text-white mb-1 font-bold" }, `${level.icon} ${level.name}`),
+              currentLevel === LEVELS.length - 1
+                ? React.createElement('p', { className: "text-yellow-300 text-sm mb-6 font-bold" }, "★ You've conquered ALL realms! ★")
+                : React.createElement('p', { className: "text-slate-300 mb-6 text-sm" }, `${LEVELS[currentLevel + 1].icon} ${LEVELS[currentLevel + 1].name} unlocked!`),
+              React.createElement('p', { className: "text-emerald-400 font-mono text-xl mb-6" }, `Score: ${score}`),
+              React.createElement('div', { className: "flex flex-col gap-3" },
+                currentLevel < LEVELS.length - 1 && React.createElement('button', {
+                  onClick: goNextLevel,
+                  className: "px-8 py-3 bg-emerald-500 hover:bg-emerald-400 transition-colors rounded-lg font-bold text-lg text-white shadow-lg"
+                }, "▶ NEXT REALM"),
+                React.createElement('button', {
+                  onClick: () => setGameState(GameState.LEVEL_SELECT),
+                  className: "px-8 py-2 bg-white/10 text-white hover:bg-white/20 transition-colors rounded-lg font-bold text-sm"
+                }, "Realm Select"),
+                React.createElement('button', {
+                  onClick: quitToMenu,
+                  className: "text-sm text-slate-400 hover:text-white underline underline-offset-4 mt-1"
+                }, "Back to Menu")
+              )
+            )
+          ),
+
+          React.createElement('div', null)
         )
       );
     };
