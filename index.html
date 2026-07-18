@@ -67,7 +67,7 @@
       PLAYING: "PLAYING", GAME_OVER: "GAME_OVER", LEVEL_COMPLETE: "LEVEL_COMPLETE"
     };
     const ThemeMode = {
-      VALLEY: "VALLEY", NIGHT: "NIGHT", DESERT: "DESERT", FROZEN: "FROZEN", VOLCANO: "VOLCANO"
+      VALLEY: "VALLEY", NIGHT: "NIGHT", DESERT: "DESERT", FROZEN: "FROZEN", VOLCANO: "VOLCANO", SAKURA: "SAKURA"
     };
 
     // ============ CONSTANTS ============
@@ -92,16 +92,17 @@
       { id: "shadow",  name: "Nightshade", head: "#4b5563", body: "#111827", eye: "#ef4444", accent: "#9ca3af", desc: "Silent and deadly" }
     ];
 
-    // ============ LEVELS (5 levels) ============
+    // ============ LEVELS (6 levels) ============
     const LEVELS = [
       { id: 1, name: "Green Valley",   theme: ThemeMode.VALLEY,  target: 5,  humans: 1, icon: "🌿" },
       { id: 2, name: "Midnight Realm", theme: ThemeMode.NIGHT,   target: 7,  humans: 2, icon: "🌙" },
       { id: 3, name: "Desert Sands",   theme: ThemeMode.DESERT,  target: 9,  humans: 3, icon: "🏜️" },
       { id: 4, name: "Frozen Tundra",  theme: ThemeMode.FROZEN,  target: 12, humans: 4, icon: "❄️" },
-      { id: 5, name: "Volcano Core",   theme: ThemeMode.VOLCANO, target: 15, humans: 5, icon: "🌋" }
+      { id: 5, name: "Volcano Core",   theme: ThemeMode.VOLCANO, target: 15, humans: 5, icon: "🌋" },
+      { id: 6, name: "Sakura Gardens", theme: ThemeMode.SAKURA,  target: 18, humans: 6, icon: "🌸" }
     ];
 
-    // ============ THEMES (5 environments) ============
+    // ============ THEMES (6 environments) ============
     const THEMES = {
       [ThemeMode.VALLEY]: {
         sky: "#f97316", ground: "#bef264", grid: "#a3e635",
@@ -162,6 +163,18 @@
         castleStyle: "volcanic",
         castleBase: "#1c1917", castleRoof: "#dc2626", castleAccent: "#fb923c",
         humanBody: "#450a0a", humanHead: "#fb923c", humanAccent: "#000000"
+      },
+      [ThemeMode.SAKURA]: {
+        sky: "#fda4af", ground: "#84cc16", grid: "#a3e635",
+        ambientIntensity: 1.0, lightColor: "#ffffff",
+        sunColor: "#ffe4e6", sunPosition: [-30, 15, -30],
+        fogColor: "#fbcfe8", fogNear: 15, fogFar: 70,
+        treeColor: "#f472b6", hillColor: "#f9a8d4",
+        windmillColor: "#9f1239", windmillPos: [15, 0, -5],
+        isNight: false, cactus: false,
+        castleStyle: "pagoda",
+        castleBase: "#7c2d12", castleRoof: "#1e3a8a", castleAccent: "#fbbf24",
+        humanBody: "#831843", humanHead: "#fef3c7", humanAccent: "#dc2626"
       }
     };
 
@@ -470,6 +483,49 @@
           )
         ),
 
+        // 6. PAGODA CASTLE (Sakura)
+        style === 'pagoda' && React.createElement(React.Fragment, null,
+          // Base
+          React.createElement('mesh', { position: [0, -0.1, 0], castShadow: true },
+            React.createElement('cylinderGeometry', { args: [0.3, 0.35, 0.4, 6] }),
+            React.createElement('meshStandardMaterial', baseMatProps)
+          ),
+          // Tier 1 Roof
+          React.createElement('mesh', { position: [0, 0.2, 0] },
+            React.createElement('coneGeometry', { args: [0.5, 0.25, 6] }),
+            React.createElement('meshStandardMaterial', roofMatProps)
+          ),
+          // Tier 2 Walls
+          React.createElement('mesh', { position: [0, 0.45, 0], castShadow: true },
+            React.createElement('cylinderGeometry', { args: [0.25, 0.3, 0.3, 6] }),
+            React.createElement('meshStandardMaterial', baseMatProps)
+          ),
+          // Tier 2 Roof
+          React.createElement('mesh', { position: [0, 0.65, 0] },
+            React.createElement('coneGeometry', { args: [0.4, 0.2, 6] }),
+            React.createElement('meshStandardMaterial', roofMatProps)
+          ),
+          // Tier 3 Walls
+          React.createElement('mesh', { position: [0, 0.85, 0], castShadow: true },
+            React.createElement('cylinderGeometry', { args: [0.2, 0.25, 0.3, 6] }),
+            React.createElement('meshStandardMaterial', baseMatProps)
+          ),
+          // Tier 3 Roof
+          React.createElement('mesh', { position: [0, 1.05, 0] },
+            React.createElement('coneGeometry', { args: [0.3, 0.2, 6] }),
+            React.createElement('meshStandardMaterial', roofMatProps)
+          ),
+          // Spire
+          React.createElement('mesh', { position: [0, 1.25, 0] },
+            React.createElement('cylinderGeometry', { args: [0.02, 0.02, 0.3, 4] }),
+            React.createElement('meshStandardMaterial', { color: theme.castleAccent })
+          ),
+          React.createElement('mesh', { position: [0, 1.4, 0] },
+            React.createElement('sphereGeometry', { args: [0.05, 8, 8] }),
+            React.createElement('meshStandardMaterial', { color: theme.castleAccent, emissive: theme.castleAccent, emissiveIntensity: 1 })
+          )
+        ),
+
         React.createElement('pointLight', { position: [0, 1, 0], intensity: 0.6, color: theme.castleAccent, distance: 5 })
       );
     };
@@ -689,6 +745,7 @@
           React.createElement(WeatherVFX, { count: 400, color: "#4b5563", size: 0.12, speed: 3.0, area: 30, sway: 0.2, glow: false, windX: 1.0, windZ: 0.0 }),
           React.createElement(WeatherVFX, { count: 100, color: "#fb923c", size: 0.15, speed: 1.2, area: 30, sway: 0.6, glow: true, windX: 1.0, windZ: 0.0 })
         ),
+        mode === ThemeMode.SAKURA && React.createElement(WeatherVFX, { count: 250, color: "#f472b6", size: 0.18, speed: 1.2, area: 30, sway: 2.5, glow: false, windX: 1.5, windZ: 0.5 }),
         
         trees,
         React.createElement('group', { position: theme.windmillPos, rotation: [0, isNight ? Math.PI / 4 : -Math.PI / 4, 0] },
@@ -1091,7 +1148,7 @@
             React.createElement('div', { className: "text-center float-in bg-black/50 p-8 md:p-12 rounded-3xl backdrop-blur-md border border-white/10 max-w-md" },
               React.createElement('h1', { className: "text-3xl md:text-5xl pixel-font text-emerald-400 mb-3 drop-shadow-lg" }, "CASTLE"),
               React.createElement('h1', { className: "text-3xl md:text-5xl pixel-font text-white mb-2 drop-shadow-lg" }, "HUNTER"),
-              React.createElement('p', { className: "text-slate-400 text-sm mb-6 font-inter" }, "VOXEL EDITION · 5 REALMS"),
+              React.createElement('p', { className: "text-slate-400 text-sm mb-6 font-inter" }, "VOXEL EDITION · 6 REALMS"),
               React.createElement('div', { className: "flex items-center justify-center gap-3 mb-6 bg-black/30 rounded-xl p-3 border border-white/5" },
                 React.createElement(SkinPreview, { skin: selectedSkin, size: 36 }),
                 React.createElement('div', { className: "text-left" },
@@ -1108,7 +1165,7 @@
                   onClick: () => setGameState(GameState.SKIN_SELECT),
                   className: "px-8 py-3 bg-white/10 hover:bg-white/20 transition-all rounded-lg font-bold text-base text-white border border-white/10"
                 }, "🎨 SKINS"),
-                React.createElement('p', { className: "text-slate-400 text-xs mt-2" }, `Best Score: ${highScore} · Realms Unlocked: ${unlockedLevels}/5`)
+                React.createElement('p', { className: "text-slate-400 text-xs mt-2" }, `Best Score: ${highScore} · Realms Unlocked: ${unlockedLevels}/6`)
               )
             )
           ),
