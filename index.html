@@ -111,6 +111,7 @@
         treeColor: "#15803d", hillColor: "#84cc16",
         windmillColor: "#78350f", windmillPos: [15, 0, -5],
         isNight: false, cactus: false,
+        castleStyle: "classic",
         castleBase: "#7c3aed", castleRoof: "#fb7185", castleAccent: "#fbbf24",
         humanBody: "#92400e", humanHead: "#fed7aa", humanAccent: "#dc2626"
       },
@@ -122,6 +123,7 @@
         treeColor: "#7c3aed", hillColor: "#4c1d95",
         windmillColor: "#4338ca", windmillPos: [-15, 0, -5],
         isNight: true, cactus: false,
+        castleStyle: "gothic",
         castleBase: "#1e293b", castleRoof: "#7c3aed", castleAccent: "#c4b5fd",
         humanBody: "#1e1b4b", humanHead: "#c4b5fd", humanAccent: "#a855f7"
       },
@@ -133,6 +135,7 @@
         treeColor: "#84cc16", hillColor: "#d97706",
         windmillColor: "#78350f", windmillPos: [15, 0, -5],
         isNight: false, cactus: true,
+        castleStyle: "arabian",
         castleBase: "#b45309", castleRoof: "#dc2626", castleAccent: "#fde68a",
         humanBody: "#92400e", humanHead: "#fde68a", humanAccent: "#b91c1c"
       },
@@ -144,6 +147,7 @@
         treeColor: "#0c4a6e", hillColor: "#e0f2fe",
         windmillColor: "#0369a1", windmillPos: [-15, 0, -5],
         isNight: false, cactus: false,
+        castleStyle: "ice",
         castleBase: "#0c4a6e", castleRoof: "#7dd3fc", castleAccent: "#ffffff",
         humanBody: "#1e40af", humanHead: "#dbeafe", humanAccent: "#0c4a6e"
       },
@@ -155,6 +159,7 @@
         treeColor: "#1c1917", hillColor: "#7c2d12",
         windmillColor: "#1c1917", windmillPos: [15, 0, -5],
         isNight: true, cactus: false,
+        castleStyle: "volcanic",
         castleBase: "#1c1917", castleRoof: "#dc2626", castleAccent: "#fb923c",
         humanBody: "#450a0a", humanHead: "#fb923c", humanAccent: "#000000"
       }
@@ -264,7 +269,7 @@
       );
     };
 
-    // ============ CASTLE COMPONENT ============
+    // ============ CASTLE COMPONENT (VARIATIONS) ============
     const Castle = ({ position, theme }) => {
       const ref = useRef(null);
       useFrame((state) => {
@@ -273,38 +278,154 @@
           ref.current.rotation.y += 0.01;
         }
       });
+
+      const style = theme.castleStyle || 'classic';
+      const isIce = style === 'ice';
+      
+      const baseMatProps = isIce 
+        ? { color: theme.castleBase, roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.85 }
+        : { color: theme.castleBase, roughness: 0.8, metalness: 0.1 };
+        
+      const roofMatProps = isIce 
+        ? { color: theme.castleRoof, roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.85 }
+        : { color: theme.castleRoof, roughness: 0.6, metalness: 0.1 };
+
+      const corners = [[-0.4, -0.4], [0.4, -0.4], [-0.4, 0.4], [0.4, 0.4]];
+
       return React.createElement('group', { ref: ref, position: [position.x, 0.5, position.z] },
+        // Base
         React.createElement('mesh', { position: [0, 0, 0], castShadow: true, receiveShadow: true },
           React.createElement('boxGeometry', { args: [0.7, 0.7, 0.7] }),
-          React.createElement('meshStandardMaterial', { color: theme.castleBase })
+          React.createElement('meshStandardMaterial', baseMatProps)
         ),
-        [-0.4, 0.4].map((x) =>
-          [-0.4, 0.4].map((z) =>
-            React.createElement('group', { key: `${x}-${z}`, position: [x, 0.2, z] },
-              React.createElement('mesh', { castShadow: true },
-                React.createElement('cylinderGeometry', { args: [0.17, 0.17, 0.9, 8] }),
-                React.createElement('meshStandardMaterial', { color: theme.castleBase })
-              ),
-              React.createElement('mesh', { position: [0, 0.55, 0] },
-                React.createElement('coneGeometry', { args: [0.22, 0.45, 8] }),
-                React.createElement('meshStandardMaterial', { color: theme.castleRoof })
-              )
+        
+        // 1. CLASSIC CASTLE (Valley)
+        style === 'classic' && React.createElement(React.Fragment, null,
+          corners.map(([x, z], i) => React.createElement('group', { key: `c-${i}`, position: [x, 0.2, z] },
+            React.createElement('mesh', { castShadow: true },
+              React.createElement('cylinderGeometry', { args: [0.17, 0.17, 0.9, 8] }),
+              React.createElement('meshStandardMaterial', roofMatProps)
+            ),
+            React.createElement('mesh', { position: [0, 0.55, 0] },
+              React.createElement('coneGeometry', { args: [0.22, 0.45, 8] }),
+              React.createElement('meshStandardMaterial', roofMatProps)
             )
+          )),
+          React.createElement('mesh', { position: [0, 0.85, 0] },
+            React.createElement('boxGeometry', { args: [0.05, 0.7, 0.05] }),
+            React.createElement('meshStandardMaterial', { color: "#fff" })
+          ),
+          React.createElement('mesh', { position: [0.2, 1.1, 0] },
+            React.createElement('planeGeometry', { args: [0.35, 0.25] }),
+            React.createElement('meshStandardMaterial', { color: theme.castleRoof, side: 2 })
+          ),
+          React.createElement('mesh', { position: [0, 1.3, 0] },
+            React.createElement('sphereGeometry', { args: [0.09, 16, 16] }),
+            React.createElement('meshStandardMaterial', { color: theme.castleAccent, emissive: theme.castleAccent, emissiveIntensity: 1 })
           )
         ),
-        React.createElement('mesh', { position: [0, 0.85, 0] },
-          React.createElement('boxGeometry', { args: [0.05, 0.7, 0.05] }),
-          React.createElement('meshStandardMaterial', { color: "#fff" })
+
+        // 2. GOTHIC CASTLE (Night)
+        style === 'gothic' && React.createElement(React.Fragment, null,
+          corners.map(([x, z], i) => React.createElement('group', { key: `g-${i}`, position: [x, 0.3, z] },
+            React.createElement('mesh', { castShadow: true },
+              React.createElement('cylinderGeometry', { args: [0.13, 0.13, 1.1, 6] }),
+              React.createElement('meshStandardMaterial', baseMatProps)
+            ),
+            React.createElement('mesh', { position: [0, 0.75, 0] },
+              React.createElement('coneGeometry', { args: [0.2, 0.6, 6] }),
+              React.createElement('meshStandardMaterial', roofMatProps)
+            )
+          )),
+          // Central spire
+          React.createElement('mesh', { position: [0, 0.6, 0] },
+            React.createElement('coneGeometry', { args: [0.3, 0.9, 4] }),
+            React.createElement('meshStandardMaterial', roofMatProps)
+          ),
+          // Eerie glowing orb
+          React.createElement('mesh', { position: [0, 1.2, 0] },
+            React.createElement('sphereGeometry', { args: [0.12, 16, 16] }),
+            React.createElement('meshStandardMaterial', { color: theme.castleAccent, emissive: theme.castleAccent, emissiveIntensity: 1.5 })
+          )
         ),
-        React.createElement('mesh', { position: [0.2, 1.1, 0] },
-          React.createElement('planeGeometry', { args: [0.35, 0.25] }),
-          React.createElement('meshStandardMaterial', { color: theme.castleRoof, side: 2 })
+
+        // 3. ARABIAN CASTLE (Desert)
+        style === 'arabian' && React.createElement(React.Fragment, null,
+          corners.map(([x, z], i) => React.createElement('group', { key: `a-${i}`, position: [x, 0.15, z] },
+            React.createElement('mesh', { castShadow: true },
+              React.createElement('cylinderGeometry', { args: [0.17, 0.17, 0.8, 8] }),
+              React.createElement('meshStandardMaterial', baseMatProps)
+            ),
+            React.createElement('mesh', { position: [0, 0.55, 0] },
+              React.createElement('sphereGeometry', { args: [0.22, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2] }),
+              React.createElement('meshStandardMaterial', roofMatProps)
+            )
+          )),
+          // Central dome
+          React.createElement('mesh', { position: [0, 0.4, 0] },
+            React.createElement('sphereGeometry', { args: [0.35, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2] }),
+            React.createElement('meshStandardMaterial', roofMatProps)
+          ),
+          // Spire
+          React.createElement('mesh', { position: [0, 0.8, 0] },
+            React.createElement('coneGeometry', { args: [0.05, 0.3, 6] }),
+            React.createElement('meshStandardMaterial', { color: theme.castleAccent })
+          ),
+          React.createElement('mesh', { position: [0, 1.05, 0] },
+            React.createElement('sphereGeometry', { args: [0.06, 16, 16] }),
+            React.createElement('meshStandardMaterial', { color: theme.castleAccent, emissive: theme.castleAccent, emissiveIntensity: 1.5 })
+          )
         ),
-        React.createElement('pointLight', { position: [0, 1, 0], intensity: 0.5, color: theme.castleAccent, distance: 4 }),
-        React.createElement('mesh', { position: [0, 1.3, 0] },
-          React.createElement('sphereGeometry', { args: [0.09, 16, 16] }),
-          React.createElement('meshStandardMaterial', { color: theme.castleAccent, emissive: theme.castleAccent, emissiveIntensity: 1 })
-        )
+
+        // 4. ICE CASTLE (Frozen)
+        style === 'ice' && React.createElement(React.Fragment, null,
+          corners.map(([x, z], i) => React.createElement('mesh', { key: `i-${i}`, position: [x, 0.4, z], castShadow: true },
+            React.createElement('octahedronGeometry', { args: [0.3, 0] }),
+            React.createElement('meshStandardMaterial', { ...roofMatProps, flatShading: true })
+          )),
+          // Central crystal spire
+          React.createElement('mesh', { position: [0, 0.5, 0], castShadow: true },
+            React.createElement('coneGeometry', { args: [0.4, 1.1, 4] }),
+            React.createElement('meshStandardMaterial', { ...roofMatProps, flatShading: true })
+          ),
+          // Glowing icy core
+          React.createElement('mesh', { position: [0, 0.1, 0] },
+            React.createElement('sphereGeometry', { args: [0.15, 16, 16] }),
+            React.createElement('meshStandardMaterial', { color: theme.castleAccent, emissive: theme.castleAccent, emissiveIntensity: 1.5, transparent: true, opacity: 0.8 })
+          )
+        ),
+
+        // 5. VOLCANIC CASTLE (Volcano)
+        style === 'volcanic' && React.createElement(React.Fragment, null,
+          corners.map(([x, z], i) => React.createElement('group', { key: `v-${i}`, position: [x, 0.15, z] },
+            React.createElement('mesh', { castShadow: true },
+              React.createElement('cylinderGeometry', { args: [0.2, 0.15, 0.7, 5] }),
+              React.createElement('meshStandardMaterial', { ...baseMatProps, flatShading: true })
+            ),
+            React.createElement('mesh', { position: [0, 0.45, 0] },
+              React.createElement('coneGeometry', { args: [0.25, 0.5, 4] }),
+              React.createElement('meshStandardMaterial', { ...roofMatProps, flatShading: true })
+            ),
+            // Lava glow at the top of the tower
+            React.createElement('mesh', { position: [0, 0.7, 0] },
+              React.createElement('sphereGeometry', { args: [0.07, 8, 8] }),
+              React.createElement('meshStandardMaterial', { color: theme.castleAccent, emissive: theme.castleAccent, emissiveIntensity: 2 })
+            )
+          )),
+          // Central jagged rock
+          React.createElement('mesh', { position: [0, 0.3, 0], castShadow: true },
+            React.createElement('coneGeometry', { args: [0.4, 0.8, 4] }),
+            React.createElement('meshStandardMaterial', { ...baseMatProps, flatShading: true })
+          ),
+          // Central lava pool/glow
+          React.createElement('mesh', { position: [0, 0.7, 0] },
+            React.createElement('sphereGeometry', { args: [0.12, 16, 16] }),
+            React.createElement('meshStandardMaterial', { color: theme.castleAccent, emissive: theme.castleAccent, emissiveIntensity: 2 })
+          )
+        ),
+
+        // Point light for all castles to make them pop in the dark
+        React.createElement('pointLight', { position: [0, 1, 0], intensity: 0.6, color: theme.castleAccent, distance: 5 })
       );
     };
 
